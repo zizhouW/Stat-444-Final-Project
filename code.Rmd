@@ -9,48 +9,359 @@ output: pdf_document
 data <- read.csv("C:/Users/wangz/Desktop/UW/UW WINTER 2018-4A/STAT 444/Project/Stat-444-Final-Project/combined.csv", header=TRUE)
 ##summary(data)
 data$WR = data$W/data$GP
+data$PRA = data$PTS + data$REB + data$AST - data$TOV + data$STL + data$BLK
 SalaryU = data[data$SGap == 1,]
 SalaryL = data[data$SGap == 0,]
 SalaryU$lSalary = log(SalaryU$Salary)
-SalaryU$PRA = SalaryU$PTS/2 + SalaryU$REB + SalaryU$AST
+SalaryU$PRA = SalaryU$PTS + SalaryU$REB + SalaryU$AST - SalaryU$TOV + SalaryU$STL + SalaryU$BLK
+SalaryU$WR = SalaryU$W/SalaryU$GP
 SalaryL$lSalary = log(SalaryL$Salary)
-SalaryL$PRA = SalaryL$PTS/2 + SalaryL$REB + SalaryL$AST
+SalaryL$PRA = SalaryL$PTS + SalaryL$REB + SalaryL$AST - SalaryL$TOV + SalaryL$STL + SalaryL$BLK
+SalaryL$WR = SalaryL$W/SalaryL$GP
 head(data)
-m1 = lm(Salary ~ AGE, data=data)
-summary(m1)
+m1 = lm(PRA ~ Salary, data=SalaryU)
+m2 = lm(Salary ~ PRA, data=SalaryU)
+m3 = lm(Salary ~ WR, data=SalaryU)
+m4 = lm(Salary ~ PLUSMINUS, data=SalaryU)
+##summary(m1)
 ##plot(m1)
-plot(SalaryU$PRA, SalaryU$Salary)
-hist(log(data$Salary))
+##plot(SalaryU$Salary, SalaryU$PRA)
+##abline(m1)
+##plot(SalaryU$PRA, SalaryU$Salary)
+##abline(m2)
+##SalaryU$PRA = SalaryU$PTS/2 + SalaryU$REB + SalaryU$AST
+##plot(SalaryU$PRA, SalaryU$Salary, main='less')
+##abline(m2)
+##plot(SalaryU$WR, SalaryU$Salary)
+##abline(m3)
+##plot(SalaryU$PLUSMINUS, SalaryU$Salary)
+##abline(m4)
+##(log(data$Salary))
 ##hist(data$Salary)
-hist(log(SalaryU$Salary))
-hist(log(SalaryL$Salary))
+##hist(log(SalaryU$Salary))
+##hist(log(SalaryL$Salary))
+```
+
+```{r}
+x = data$PRA
+y = log(data$Salary)
+breaks_v <- seq(min(x), max(x), length.out=15)
+nbhd_v <- cut(x,
+  breaks= breaks_v,
+  include.lowest=TRUE
+)
+# varying size, constant proportions
+breaks_p <- c(quantile(x, seq(0,1,0.1) ))
+nbhd_p <- cut(x,
+  breaks=breaks_p,
+  include.lowest=TRUE
+)
+
+local_v <- levels(nbhd_v)
+local_p <- levels(nbhd_p)
+# Compute the local averages
+get_ave <- function(locals, nbhds) {
+mu <- vector(mode="numeric", length=length(x))
+for (i in 1:length(locals)) {
+nbhd_i <- nbhds == locals[i]
+mu[nbhd_i] <- mean(y[nbhd_i])
+}
+mu
+}
+mu_v <- get_ave(local_v, nbhd_v)
+mu_p <- get_ave(local_p, nbhd_p)
+# A quick and dirty way to draw the mu by neighbourhood
+plot_ave <- function(locals,
+nbhds,
+x,
+mu,
+...)
+{for (i in 1:length(locals)) {
+nbhd_i <- nbhds == locals[i]
+newx <- x[nbhd_i]
+newmu <- mu[nbhd_i]
+Xorder <- order(newx)
+if(length(newx)==1){
+lines(rep(newx[Xorder],2),
+rep(newmu[Xorder],2),
+...)
+} else {
+lines(newx[Xorder], newmu[Xorder], ...)
+}
+}
+}
+# plot
+plot(x,y,
+col="grey80", pch=19, cex=0.5,
+main = "Constant width nbhd")
+plot_ave(local_v, nbhd_v, x, mu_v,
+col="blue", lwd=5)
+plot(x,y,
+col="grey80", pch=19, cex=0.5,
+main = "Constant proportion nbhd")
+plot_ave(local_p, nbhd_p, x, mu_p,
+col="red", lwd=5)
 ```
 
 ```{r}
 library(splines)
+library(MASS)
 p <- 3
-# Note that the knots here are the interior knots
-# To match our previous fits, we might choose
-knots_p <- quantile(SalaryU$PRA, seq(0.1, 0.5, 0.1))
-Xmat <- bs(SalaryU$PRA, degree= p, knots=knots_p)
-head(Xmat)
-Xorder <- order(SalaryU$PRA)
+x = data$PRA
+y = log(data$Salary)
+gap = data$SGap
+
+knots_p <- quantile(x, seq(0.1, 0.9, 0.1))
+Xmat <- bs(x, degree= p, knots=knots_p)
+Xorder <- order(x)
 blim <- extendrange(Xmat)
 parOptions <- par(mfrow = c(2,2))
-  for (j in 1:ncol(Xmat)) {
-  plot(SalaryU$PRA[Xorder], Xmat[Xorder,j],
+for (j in 1:ncol(Xmat)) {
+  plot(x[Xorder], Xmat[Xorder,j],
   type="l",
   ylim=blim,
-  xlim = extendrange(SalaryU$PRA),
-  xlab="PRA", ylab="Basis",
+  xlim = extendrange(x),
+  xlab="x", ylab="Basis",
   main=paste("Basis vector", j),
   col="steelblue")
-  }
+}
 par(parOptions)
-fit <- lm(SalaryU$Salary ~ bs(SalaryU$PRA, degree= p, knots=knots_p))
-xrange <- extendrange(SalaryU$PRA)
-xnew <- seq(min(xrange), max(xrange), length.out=440)
-ypred <- predict(fit,newdata=data.frame(X=xnew))
-plot(SalaryU$PRA, SalaryU$Salary, col="grey80", pch=19, cex=0.5,main = "PTS vs Salary")
+## cubic spline
+fit <- lm(y ~ bs(x, degree= p, knots=knots_p))
+xrange <- extendrange(x)
+xnew <- seq(min(xrange), max(xrange), length.out=515)
+ypred <- predict(fit,newdata=data.frame(x=xnew))
+plot(x,y,xlab="PRA", ylab="Salary",
+  col="grey80", pch=19, cex=0.5,
+  main = "Cubic Spline")
 lines(xnew, ypred, col="darkgreen", lwd=2, lty=1)
+
+## bisqure
+fit2 <- rlm(y ~ bs(x, degree= p, knots=knots_p), psi=psi.bisquare)
+ypred2 <- predict(fit2,newdata=data.frame(x=xnew))
+plot(x,y,xlab="PRA", ylab="Salary",
+  col="grey80", pch=19, cex=0.5,
+  main = "Bisquare fit cubic spline")
+lines(xnew, ypred2, col="firebrick", lwd=2, lty=1)
+
+## smoothing spling
+df <- 10
+sm <- smooth.spline(x, y, df = df)
+ypred.sm <- predict(sm, x=xnew)$y
+plot(x,y,
+col="grey80", pch=19, cex=0.5,
+main = paste("Smoothing spline, df =", df)
+)
+lines(xnew, ypred.sm, col="steelblue", lwd=2)
+```
+```{r}
+library(splines)
+library(MASS)
+p <- 3
+x = SalaryU$PRA
+y = log(SalaryU$Salary)
+gap = data$SGap
+
+knots_p <- quantile(x, seq(0.1, 0.9, 0.1))
+Xmat <- bs(x, degree= p, knots=knots_p)
+Xorder <- order(x)
+blim <- extendrange(Xmat)
+parOptions <- par(mfrow = c(2,2))
+for (j in 1:ncol(Xmat)) {
+  plot(x[Xorder], Xmat[Xorder,j],
+  type="l",
+  ylim=blim,
+  xlim = extendrange(x),
+  xlab="x", ylab="Basis",
+  main=paste("Basis vector", j),
+  col="steelblue")
+}
+par(parOptions)
+## cubic spline
+fit <- lm(y ~ bs(x, degree= p, knots=knots_p))
+xrange <- extendrange(x)
+xnew <- seq(min(xrange), max(xrange), length.out=515)
+ypred <- predict(fit,newdata=data.frame(x=xnew))
+plot(x,y,xlab="PRA", ylab="Salary",
+  col="grey80", pch=19, cex=0.5,
+  main = "Cubic Spline")
+lines(xnew, ypred, col="darkgreen", lwd=2, lty=1)
+
+## bisqure
+fit2 <- rlm(y ~ bs(x, degree= p, knots=knots_p), psi=psi.bisquare)
+ypred2 <- predict(fit2,newdata=data.frame(x=xnew))
+plot(x,y,xlab="PRA", ylab="Salary",
+  col="grey80", pch=19, cex=0.5,
+  main = "Bisquare fit cubic spline")
+lines(xnew, ypred2, col="firebrick", lwd=2, lty=1)
+
+## smoothing spling
+df <- 7
+sm <- smooth.spline(x, y, df = df)
+ypred.sm <- predict(sm, x=xnew)$y
+plot(x,y,
+col="grey80", pch=19, cex=0.5,
+main = paste("Smoothing spline, df =", df)
+)
+lines(xnew, ypred.sm, col="steelblue", lwd=2)
+```
+
+```{r}
+getmubar<-function(muhats) {
+  function(x){
+    Ans <-sapply(muhats, FUN=function(muhat){muhat(x)})
+    apply(Ans, MARGIN=1, FUN=mean)
+  }
+}
+ave_y_mu_sq <- function(sample, predfun){
+  mean(abs(sample$y - predfun(sample$x))^2)
+}
+ave_mu_mu_sq <- function(predfun1, predfun2,x){
+  mean((predfun1(x)- predfun2(x))^2)
+}
+
+apse <- function(Ssamples, Tsamlpes, fitFunc, df){
+  N_S <-length(Ssamples)
+  mean(sapply(1:N_S,
+       FUN = function(j){
+         S_j <- Ssamples[[j]]
+         muhat <- fitFunc(S_j, df=df)
+         T_j <- Tsamlpes[[j]]
+         ave_y_mu_sq(T_j,muhat)
+       })
+  )
+}
+
+kfold <-function(N,k=N,indices=NULL){
+  if (is.null(indices)) {
+    indices <-sample(1:N, N,replace=FALSE)
+    } else {
+      N <-length(indices)
+    }
+  
+  if (k >N)stop("k must not exceed N")
+  gsize <-rep(round(N/k), k)
+  extra <-N -sum(gsize)
+  if (extra >0) {
+    for (i in 1:extra) {
+      gsize[i] <-gsize[i] +1
+    }
+  }
+  if (extra <0) {
+    for (i in 1:abs(extra)) {
+      gsize[i] <-gsize[i] -1
+    }
+  }
+  running_total <-c(0,cumsum(gsize))
+  lapply(1:k,
+         FUN=function(i) {
+           indices[seq(from =1+running_total[i],
+                       to =running_total[i+1],
+                       by =1)]
+         }
+  )
+}
+getKfoldSamples <-function (x, y, k,indices=NULL){
+  groups <-kfold(length(x), k, indices)
+  Ssamples <-lapply(groups,
+                    FUN=function(group) {
+                      list(x=x[-group],y=y[-group])
+                      })
+  Tsamples <-lapply(groups,
+                    FUN=function(group) {
+                      list(x=x[group],y=y[group])
+                      })
+  list(Ssamples =Ssamples,Tsamples =Tsamples)
+}
+
+#named with testwithv because when you fold k you get v!
+testwithv <- function(x,y,k, fitFunc, df) {
+  samples = getKfoldSamples(x,y,k)
+  apse(samples$Ssamples, samples$Tsamples, fitFunc , df)
+  
+}
+
+k=5
+df = 3
+
+#replace fitFunc wtih your function
+testwithv(x,y,k,
+          fitFunc = function(sample, df){
+            x = sample$x
+            y = sample$y
+            fit <- lm(y ~ bs(x, degree= p, knots=knots_p))
+            muhat <- function(newX) {
+              predict(fit, newdata = list(x=newX))
+            }
+            muhat
+          }, df)
+
+
+```
+
+
+```{r}
+library(splines)
+library(MASS)
+p <- 3
+x = SalaryL$PRA
+y = log(SalaryL$Salary)
+gap = data$SGap
+
+knots_p <- quantile(x, seq(0.1, 0.9, 0.1))
+Xmat <- bs(x, degree= p, knots=knots_p)
+Xorder <- order(x)
+blim <- extendrange(Xmat)
+parOptions <- par(mfrow = c(2,2))
+for (j in 1:ncol(Xmat)) {
+  plot(x[Xorder], Xmat[Xorder,j],
+  type="l",
+  ylim=blim,
+  xlim = extendrange(x),
+  xlab="x", ylab="Basis",
+  main=paste("Basis vector", j),
+  col="steelblue")
+}
+par(parOptions)
+## cubic spline
+fit <- lm(y ~ bs(x, degree= p, knots=knots_p))
+xrange <- extendrange(x)
+xnew <- seq(min(xrange), max(xrange), length.out=515)
+ypred <- predict(fit,newdata=data.frame(x=xnew))
+plot(x,y,xlab="PRA", ylab="Salary",
+  col="grey80", pch=19, cex=0.5,
+  main = "Cubic Spline")
+lines(xnew, ypred, col="darkgreen", lwd=2, lty=1)
+
+## bisqure
+fit2 <- rlm(y ~ bs(x, degree= p, knots=knots_p), psi=psi.bisquare)
+ypred2 <- predict(fit2,newdata=data.frame(x=xnew))
+plot(x,y,xlab="PRA", ylab="Salary",
+  col="grey80", pch=19, cex=0.5,
+  main = "Bisquare fit cubic spline")
+lines(xnew, ypred2, col="firebrick", lwd=2, lty=1)
+
+## smoothing spling
+df <- 5
+sm <- smooth.spline(x, y, df = df)
+ypred.sm <- predict(sm, x=xnew)$y
+plot(x,y,
+col="grey80", pch=19, cex=0.5,
+main = paste("Smoothing spline, df =", df)
+)
+lines(xnew, ypred.sm, col="steelblue", lwd=2)
+```
+
+
+```{r}
+library(randomForest)
+set.seed(54321)
+
+data.bag <- randomForest(log(Salary) ~
+                         PTS + REB + AST - TOV + STL + BLK,
+                         data = data,
+                         mtry = 8,
+                         na.action = na.omit
+            )
+data.bag
 ```
