@@ -104,6 +104,7 @@ col="red", lwd=5)
 ```
 
 ```{r}
+## Smoothing, all
 library(splines)
 library(MASS)
 p <- 3
@@ -155,6 +156,7 @@ main = paste("Smoothing spline, df =", df)
 lines(xnew, ypred.sm, col="steelblue", lwd=2)
 ```
 ```{r}
+## Smoothing, upper salary
 library(splines)
 library(MASS)
 p <- 3
@@ -207,6 +209,7 @@ lines(xnew, ypred.sm, col="steelblue", lwd=2)
 ```
 
 ```{r}
+## Cross Validation
 getmubar<-function(muhats) {
   function(x){
     Ans <-sapply(muhats, FUN=function(muhat){muhat(x)})
@@ -301,6 +304,7 @@ testwithv(x,y,k,
 
 
 ```{r}
+## Smoothing, lower salary
 library(splines)
 library(MASS)
 p <- 3
@@ -354,14 +358,44 @@ lines(xnew, ypred.sm, col="steelblue", lwd=2)
 
 
 ```{r}
+## Random Forest
 library(randomForest)
-set.seed(54321)
+get.explanatory_varnames <- function(formula){
+  f <- as.formula(formula)
+  terms <- terms(f)
+  attr(terms, "term.labels")
+}
+##set.seed(54321)
+N <- nrow(data)
+N_train <- round(2* N /3)
+N_test <- N - N_train
+id.train <- sample(1:N, N_train, replace=FALSE)
+id.test <- setdiff(1:N, id.train)
 
-data.bag <- randomForest(log(Salary) ~
-                         PTS + REB + AST - TOV + STL + BLK,
-                         data = data,
-                         mtry = 8,
-                         na.action = na.omit
-            )
-data.bag
+data.rf <- randomForest(log(Salary) ~
+                        PTS + REB + AST + TOV + STL + BLK + Team + AGE + FGM + TPM + FTM + PF + PLUSMINUS + Position + Country,
+                      data = data,
+                      importance = TRUE,
+                      subset = id.train,
+                      mtry = 3)
+importance(data.rf, type=2) #the drop in RSS
+importance(data.rf, type=1) #average decrease in the accuracy of predictions
+varImpPlot(data.rf)
+trainy <- log(data[,"Salary"])
+trainx <- data[, get.explanatory_varnames(data.rf)]
+# Five fold cross-validataion
+data.rfcv <- rfcv(trainx = trainx, trainy = trainy, cv.fold = 5)
+# We can plot the results
+with(data.rfcv, plot(n.var, error.cv, pch = 19, type="b", col="blue"))
+
+
+data.rfcv.8 <- randomForest(log(Salary) ~
+                       Team + FGM + PTS + AGE + TOV + PF + REB + FTM,
+                      data = data,
+                      importance = TRUE)
+trainx <- data[, get.explanatory_varnames(data.rfcv.8)]
+# Five fold cross-validataion
+data.rfcv <- rfcv(trainx = trainx, trainy = trainy, cv.fold = 5)
+# We can plot the results
+with(data.rfcv, plot(n.var, error.cv, pch = 19, type="b", col="blue"))
 ```
