@@ -73,8 +73,8 @@ testwithv <- function(x,y,k, fitFunc, df) {
 }
 
 
-x = seq(1,100)
-y = seq(2,200, by=2)
+x = seq(1,103)
+y = seq(2,206, by=2)
 
 k=5
 df = 3
@@ -86,8 +86,6 @@ testwithv(x,y,k,
             y = sample$y
             fit <- lm(y ~ x)
             muhat <- function(newX) {
-              print(newX)
-              print(predict(fit, newdata = list(x=newX)))
               predict(fit, newdata = list(x=newX))
             }
             muhat
