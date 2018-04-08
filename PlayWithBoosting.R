@@ -4,11 +4,7 @@ xTest = seq(101,105)
 yTest = 2*xTest
 Traindata = data.frame(xTrain, yTrain)
 library(gbm)
-boost <-gbm(formula = yTrain~xTrain,data=Traindata,shrinkage =0.7,n.trees =1500)
-pred= predict(object = boost,
-                              newdata = list(xTrain = xTest),
-                              n.trees = 1500,
-                              type = "response")
-pred
+boost <-gbm(formula = yTrain~xTrain,data=Traindata,shrinkage =0.3,n.trees =150)
+boost$fit
 
 #??????work! fit?????????!

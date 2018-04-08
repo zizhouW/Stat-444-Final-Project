@@ -5,11 +5,16 @@ date: "April 6, 2018"
 output: pdf_document
 ---
 
-```{r}
+<<<<<<< HEAD
+```{r echo=FALSE}
 data <- read.csv("C:/Users/wangz/Desktop/UW/UW WINTER 2018-4A/STAT 444/Project/Stat-444-Final-Project/combined.csv", header=TRUE)
+=======
+```{r}
+data <- read.csv("combined.csv", header=TRUE)
+>>>>>>> 8251b5d81bd9018b94381f35bb2912e4c0baf44d
 ##summary(data)
 data$WR = data$W/data$GP
-data$PRA = data$PTS + data$REB + data$AST - data$TOV + data$STL + data$BLK
+data$PRA = data$PTS + data$REB + data$AST + data$STL + data$BLK - data$TOV - data$FGM - data$FTM
 SalaryU = data[data$SGap == 1,]
 SalaryL = data[data$SGap == 0,]
 SalaryU$lSalary = log(SalaryU$Salary)
@@ -42,7 +47,9 @@ m4 = lm(Salary ~ PLUSMINUS, data=SalaryU)
 ##hist(log(SalaryL$Salary))
 ```
 
-```{r}
+One of the most straight forward way to evaluate the performance of an NBA player is to look at his "Points per Game", "Assists per Game", and "Rebounds per Game", which are the 3 most popular statistics in NBA. We initially tried to find a relationship between the PRA(Points + Rebounds + Assists per game) and the Salary of an NBA player. However, we realized that it will almost always introduce a bias, because it does not tell us the full image of the player's ability. For example, Points are usually easier to get compared to Assists and Rebounds. When a player scores, they will either get two points or three points, potentially earning an extra Free Throw, which counts as one more point. When a player gets an Assist or a Rebound, the count only goes up by 1. Having 10 Rebounds or 10 Assists after a game is considered a good performance, but having 10 Points for a game is usually average. The PRA also introduces a heavier weight on the player's offensive ability than his defensive ability on the court, since Points, Assists, and Offensive Rebounds all happen at the front court. Therefore, we found a better way to determine the efficiency of an NBA player, which is to look at his EFF, calculated by EFF = PTS + REB + AST + STL + BLK − FGM − FTM - TO, where all variates are averaged per game. The EFF takes Steal (STL), Block (BLK), Field Goal Missed (FGM), Free Throw Missed (FTM), and Turn Over (TO) into account, which adds the defensive ability (STL and BLK) and inefficiency (FGM, FTM, TO) into the equation.
+
+```{r echo=FALSE}
 x = data$PRA
 y = log(data$Salary)
 breaks_v <- seq(min(x), max(x), length.out=15)
@@ -91,28 +98,31 @@ lines(newx[Xorder], newmu[Xorder], ...)
 }
 }
 # plot
-plot(x,y,
+plot(x,y,xlab="EFF", ylab="log(Salary)",
+col="grey80", pch=19, cex=0.5,
+main = "Constant width nbhd")
+plot(x,y,xlab="EFF", ylab="log(Salary)",
 col="grey80", pch=19, cex=0.5,
 main = "Constant width nbhd")
 plot_ave(local_v, nbhd_v, x, mu_v,
 col="blue", lwd=5)
-plot(x,y,
+plot(x,y,xlab="EFF", ylab="log(Salary)",
 col="grey80", pch=19, cex=0.5,
 main = "Constant proportion nbhd")
 plot_ave(local_p, nbhd_p, x, mu_p,
 col="red", lwd=5)
 ```
+We first want to see what our data look like when EFF is plotted aginst log(Salary), even though our data look to be bimodel, we can still observe an increasing trend, according to the piece wise fitting using neighbourhood.
 
-```{r}
+```{r echo=FALSE}
 ## Smoothing, all
 library(splines)
 library(MASS)
 p <- 3
 x = data$PRA
 y = log(data$Salary)
-gap = data$SGap
 
-knots_p <- quantile(x, seq(0.1, 0.9, 0.1))
+knots_p <- quantile(x, seq(0.2, 0.9, 0.1))
 Xmat <- bs(x, degree= p, knots=knots_p)
 Xorder <- order(x)
 blim <- extendrange(Xmat)
@@ -122,92 +132,55 @@ for (j in 1:ncol(Xmat)) {
   type="l",
   ylim=blim,
   xlim = extendrange(x),
-  xlab="x", ylab="Basis",
+  xlab="EFF", ylab="Basis",
   main=paste("Basis vector", j),
   col="steelblue")
 }
 par(parOptions)
-## cubic spline
-fit <- lm(y ~ bs(x, degree= p, knots=knots_p))
-xrange <- extendrange(x)
-xnew <- seq(min(xrange), max(xrange), length.out=515)
-ypred <- predict(fit,newdata=data.frame(x=xnew))
-plot(x,y,xlab="PRA", ylab="Salary",
-  col="grey80", pch=19, cex=0.5,
-  main = "Cubic Spline")
-lines(xnew, ypred, col="darkgreen", lwd=2, lty=1)
-
-## bisqure
-fit2 <- rlm(y ~ bs(x, degree= p, knots=knots_p), psi=psi.bisquare)
-ypred2 <- predict(fit2,newdata=data.frame(x=xnew))
-plot(x,y,xlab="PRA", ylab="Salary",
-  col="grey80", pch=19, cex=0.5,
-  main = "Bisquare fit cubic spline")
-lines(xnew, ypred2, col="firebrick", lwd=2, lty=1)
-
-## smoothing spling
-df <- 10
-sm <- smooth.spline(x, y, df = df)
-ypred.sm <- predict(sm, x=xnew)$y
-plot(x,y,
-col="grey80", pch=19, cex=0.5,
-main = paste("Smoothing spline, df =", df)
-)
-lines(xnew, ypred.sm, col="steelblue", lwd=2)
 ```
-```{r}
-## Smoothing, upper salary
-library(splines)
-library(MASS)
-p <- 3
-x = SalaryU$PRA
-y = log(SalaryU$Salary)
-gap = data$SGap
+We then try to fit a cubic spline to our data. First we need to get its basis functions for our fitted model, which can be illustrated by plotting them as a function of EFF.
+The basis functions are clearly not polynomials. The estimated smooth will be a linear combination of these basis functions.
 
-knots_p <- quantile(x, seq(0.1, 0.9, 0.1))
-Xmat <- bs(x, degree= p, knots=knots_p)
-Xorder <- order(x)
-blim <- extendrange(Xmat)
-parOptions <- par(mfrow = c(2,2))
-for (j in 1:ncol(Xmat)) {
-  plot(x[Xorder], Xmat[Xorder,j],
-  type="l",
-  ylim=blim,
-  xlim = extendrange(x),
-  xlab="x", ylab="Basis",
-  main=paste("Basis vector", j),
-  col="steelblue")
-}
-par(parOptions)
+```{r echo=FALSE}
 ## cubic spline
 fit <- lm(y ~ bs(x, degree= p, knots=knots_p))
 xrange <- extendrange(x)
 xnew <- seq(min(xrange), max(xrange), length.out=515)
 ypred <- predict(fit,newdata=data.frame(x=xnew))
-plot(x,y,xlab="PRA", ylab="Salary",
+plot(x,y,xlab="EFF", ylab="Salary",
   col="grey80", pch=19, cex=0.5,
   main = "Cubic Spline")
 lines(xnew, ypred, col="darkgreen", lwd=2, lty=1)
-
+```
+We then fitted the cubic spline to the data.
+```{r echo=FALSE}
 ## bisqure
 fit2 <- rlm(y ~ bs(x, degree= p, knots=knots_p), psi=psi.bisquare)
 ypred2 <- predict(fit2,newdata=data.frame(x=xnew))
-plot(x,y,xlab="PRA", ylab="Salary",
+plot(x,y,xlab="EFF", ylab="Salary",
   col="grey80", pch=19, cex=0.5,
   main = "Bisquare fit cubic spline")
 lines(xnew, ypred2, col="firebrick", lwd=2, lty=1)
 
+```
+
+```{r echo=FALSE}
 ## smoothing spling
-df <- 7
+df <- 11
 sm <- smooth.spline(x, y, df = df)
 ypred.sm <- predict(sm, x=xnew)$y
-plot(x,y,
+plot(x,y,xlab="EFF", ylab="Salary",
 col="grey80", pch=19, cex=0.5,
 main = paste("Smoothing spline, df =", df)
 )
 lines(xnew, ypred.sm, col="steelblue", lwd=2)
 ```
 
+<<<<<<< HEAD
+```{r echo=FALSE}
+Xmat.ns <- ns(x, knots=knots_p)
+blim <- extendrange(Xmat.ns)
+=======
 ```{r}
 ## Cross Validation
 getmubar<-function(muhats) {
@@ -286,20 +259,30 @@ testwithv <- function(x,y,k, fitFunc, df) {
 
 k=5
 df = 3
+library(gbm)
+#replace fitFunc wtih your function
+testwithv(x,y,k,
+          fitFunc = function(sample, df){
+          boost <-gbm(formula = y~x, data=sample, n.trees=2500, distribution="gaussian", interaction.depth=1, bag.fraction=0.2, train.fraction=1, shrinkage=0.4)
+            muhat <- function(newX) {
+              
+              predict(boost, newdata = as.data.frame(newX), n.trees=100, type = "response")
+            }
+            muhat
+          }, df)
 
 #replace fitFunc wtih your function
 testwithv(x,y,k,
           fitFunc = function(sample, df){
-            x = sample$x
-            y = sample$y
-            fit <- lm(y ~ bs(x, degree= p, knots=knots_p))
+            x=sample$x
+            y=sample$y
+          fit = lm(y~ bs(x, degree = p,knots = knots_p))
             muhat <- function(newX) {
               predict(fit, newdata = list(x=newX))
             }
             muhat
           }, df)
-
-
+          
 ```
 
 
@@ -316,48 +299,34 @@ knots_p <- quantile(x, seq(0.1, 0.9, 0.1))
 Xmat <- bs(x, degree= p, knots=knots_p)
 Xorder <- order(x)
 blim <- extendrange(Xmat)
+>>>>>>> 8251b5d81bd9018b94381f35bb2912e4c0baf44d
 parOptions <- par(mfrow = c(2,2))
-for (j in 1:ncol(Xmat)) {
-  plot(x[Xorder], Xmat[Xorder,j],
-  type="l",
-  ylim=blim,
-  xlim = extendrange(x),
-  xlab="x", ylab="Basis",
-  main=paste("Basis vector", j),
-  col="steelblue")
+for (j in 1:ncol(Xmat.ns)) {
+  plot(x[Xorder], Xmat.ns[Xorder,j],
+    type="l",
+    ylim=blim,
+    xlim = extendrange(x),
+    xlab="EFF", ylab="Basis",
+    main=paste("ns basis vector", j),
+    col="firebrick")
 }
+
 par(parOptions)
-## cubic spline
-fit <- lm(y ~ bs(x, degree= p, knots=knots_p))
-xrange <- extendrange(x)
-xnew <- seq(min(xrange), max(xrange), length.out=515)
-ypred <- predict(fit,newdata=data.frame(x=xnew))
-plot(x,y,xlab="PRA", ylab="Salary",
+fit.bs <- lm(y ~ bs(x, degree= p, knots=knots_p))
+fit.ns <- lm(y ~ ns(x, knots=knots_p))
+# And now the predicted values for plotting
+ypred.bs <- predict(fit.bs, newdata= data.frame(x=xnew))
+ypred.ns <- predict(fit.ns, newdata= data.frame(x=xnew))
+plot(x,y,xlab="EFF", ylab="Salary",
   col="grey80", pch=19, cex=0.5,
-  main = "Cubic Spline")
-lines(xnew, ypred, col="darkgreen", lwd=2, lty=1)
-
-## bisqure
-fit2 <- rlm(y ~ bs(x, degree= p, knots=knots_p), psi=psi.bisquare)
-ypred2 <- predict(fit2,newdata=data.frame(x=xnew))
-plot(x,y,xlab="PRA", ylab="Salary",
-  col="grey80", pch=19, cex=0.5,
-  main = "Bisquare fit cubic spline")
-lines(xnew, ypred2, col="firebrick", lwd=2, lty=1)
-
-## smoothing spling
-df <- 5
-sm <- smooth.spline(x, y, df = df)
-ypred.sm <- predict(sm, x=xnew)$y
-plot(x,y,
-col="grey80", pch=19, cex=0.5,
-main = paste("Smoothing spline, df =", df)
-)
-lines(xnew, ypred.sm, col="steelblue", lwd=2)
+  main = "Natural Cubic Spline")
+lines(xnew, ypred.ns, col="darkgreen", lwd=2, lty=1)
 ```
 
+# Random Forest
 
-```{r}
+We would like to utilize random forest to determine the importance of explanatory variates.
+```{r echo=FALSE}
 ## Random Forest
 library(randomForest)
 get.explanatory_varnames <- function(formula){
@@ -373,11 +342,12 @@ id.train <- sample(1:N, N_train, replace=FALSE)
 id.test <- setdiff(1:N, id.train)
 
 data.rf <- randomForest(log(Salary) ~
-                        PTS + REB + AST + TOV + STL + BLK + Team + AGE + FGM + TPM + FTM + PF + PLUSMINUS + Position + Country,
-                      data = data,
-                      importance = TRUE,
-                      subset = id.train,
-                      mtry = 3)
+                          PTS + REB + AST + TOV + STL + BLK + Team + WR + AGE + FGM + 
+                          FGPER + TPM + TPPER + FTM + FTPER + PF + PLUSMINUS + Position + Country + MIN + 
+                          Draft.Round,
+                        data = data,
+                        importance = TRUE,subset = id.train,
+                        mtry = 3)
 importance(data.rf, type=2) #the drop in RSS
 importance(data.rf, type=1) #average decrease in the accuracy of predictions
 varImpPlot(data.rf)
@@ -386,16 +356,66 @@ trainx <- data[, get.explanatory_varnames(data.rf)]
 # Five fold cross-validataion
 data.rfcv <- rfcv(trainx = trainx, trainy = trainy, cv.fold = 5)
 # We can plot the results
-with(data.rfcv, plot(n.var, error.cv, pch = 19, type="b", col="blue"))
+with(data.rfcv, plot(n.var, error.cv, pch = 19, type="b", col="blue")) 
+```
+We used PTS, REB, AST, TOV, STL, BLK, Team, WR, AGE, FGM, FGPER, TPM, TPPER, FTM, FTPER, PF, PLUSMINUS, Position, Country, MIN, and Draft.Round against log(Salary) for the random forest. We did not choose to include Draft.Number because it is a categorical variate with 60 different potential values, but random forest does not accept categorical predictors with more than 53 categories.
 
+The result suggests that the error of cross validation is the lowest for 10 explanatory variates, at about 1.19. We then choose the top 10 most important variates based on RSS, Team, MIN, FGM, PTS, AGE, REB, Draft.Round, PF, TOV, and FTM, and run the process again.
 
-data.rfcv.8 <- randomForest(log(Salary) ~
-                       Team + FGM + PTS + AGE + TOV + PF + REB + FTM,
+```{r}
+
+data.rfcv.10 <- randomForest(log(Salary) ~
+                       Team + MIN + FGM + PTS + AGE + REB + Draft.Round + PF + TOV + FTM,
                       data = data,
                       importance = TRUE)
-trainx <- data[, get.explanatory_varnames(data.rfcv.8)]
+trainx <- data[, get.explanatory_varnames(data.rfcv.10)]
 # Five fold cross-validataion
 data.rfcv <- rfcv(trainx = trainx, trainy = trainy, cv.fold = 5)
 # We can plot the results
 with(data.rfcv, plot(n.var, error.cv, pch = 19, type="b", col="blue"))
+```
+The result from the second run suggests that the error of cross validation is the lowest when there are 5 explanatory variates, at around 1.19. We then choose the top 5 most important variates againbased on RSS, which are Team, MIN, FGM, PTS, and AGE, and run the process again.
+
+```{r}
+
+data.rfcv.5 <- randomForest(log(Salary) ~
+                       Team + MIN + FGM + PTS + AGE,
+                      data = data,
+                      importance = TRUE)
+trainx <- data[, get.explanatory_varnames(data.rfcv.5)]
+# Five fold cross-validataion
+data.rfcv <- rfcv(trainx = trainx, trainy = trainy, cv.fold = 5)
+# We can plot the results
+with(data.rfcv, plot(n.var, error.cv, pch = 19, type="b", col="blue"))
+```
+The result from the third run suggests that the error of cross validation is the lowest when there are 5 explanatory variates, at around 1.59. We can say that the Team, MIN, FGM, PTS, and AGE are important variates based on cross validation. Also, AGE seems to be the most important for predictive purposes.
+
+To make a more sensible modelling exercise would consider how Salary might depend on just those explanatory variates that were under the control of the NBA player. Therefore, we removed Team, MIN, WR, AGE, Draft.Round, and PLUSMINUS. Age is obviously an uncontrollable variate. We think players rarely have control for Team, MIN, and Draft.Round since it does not depend on players' previous NBA performance, instead, these would depend on the decisions from coach and the organization Also, WR and PLUSMINUS have a lot to do with the teammates of the NBA player we are trying to analyze, so we decided to take these out of consideration as well. This move left us with 15 explanatory variates.
+```{r}
+data.rf2 <- randomForest(log(Salary) ~
+                           PTS + REB + AST + TOV + STL + BLK + FGM + FGPER + TPM + 
+                           TPPER + FTM + FTPER + PF + Position + Country,
+                         data = data,
+                         importance = TRUE,subset = id.train,
+                         mtry = 3)
+importance(data.rf2, type=2) #the drop in RSS
+importance(data.rf2, type=1) #average decrease in the accuracy of predictions
+varImpPlot(data.rf2)
+trainy2 <- log(data[,"Salary"])
+trainx2 <- data[, get.explanatory_varnames(data.rf2)]
+# Five fold cross-validataion
+data.rfcv2 <- rfcv(trainx = trainx2, trainy = trainy2, cv.fold = 5)
+# We can plot the results
+with(data.rfcv2, plot(n.var, error.cv, pch = 19, type="b", col="blue")) 
+```
+The cross validation suggests that all 15 explanatory variates are important. The result also suggests that FGM, TOV, REB, and PTS are the most important.
+
+```{r echo=FALSE}
+plot(data$Team, data$Salary, xlab="Team", ylab="Salary")
+m5 = lm(log(Salary) ~ AGE, data=SalaryU)
+plot(SalaryU$AGE, log(SalaryU$Salary))
+abline(m5)
+m6 = lm(log(Salary) ~ AGE, data=SalaryL)
+plot(SalaryL$AGE, log(SalaryL$Salary))
+abline(m6)
 ```
