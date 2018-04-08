@@ -6,7 +6,7 @@ output: pdf_document
 ---
 
 ```{r}
-data <- read.csv("C:/Users/wangz/Desktop/UW/UW WINTER 2018-4A/STAT 444/Project/Stat-444-Final-Project/combined.csv", header=TRUE)
+data <- read.csv("combined.csv", header=TRUE)
 ##summary(data)
 data$WR = data$W/data$GP
 data$PRA = data$PTS + data$REB + data$AST - data$TOV + data$STL + data$BLK
@@ -286,20 +286,30 @@ testwithv <- function(x,y,k, fitFunc, df) {
 
 k=5
 df = 3
+library(gbm)
+#replace fitFunc wtih your function
+testwithv(x,y,k,
+          fitFunc = function(sample, df){
+          boost <-gbm(formula = y~x, data=sample, n.trees=2500, distribution="gaussian", interaction.depth=1, bag.fraction=0.2, train.fraction=1, shrinkage=0.4)
+            muhat <- function(newX) {
+              
+              predict(boost, newdata = as.data.frame(newX), n.trees=100, type = "response")
+            }
+            muhat
+          }, df)
 
 #replace fitFunc wtih your function
 testwithv(x,y,k,
           fitFunc = function(sample, df){
-            x = sample$x
-            y = sample$y
-            fit <- lm(y ~ bs(x, degree= p, knots=knots_p))
+            x=sample$x
+            y=sample$y
+          fit = lm(y~ bs(x, degree = p,knots = knots_p))
             muhat <- function(newX) {
               predict(fit, newdata = list(x=newX))
             }
             muhat
           }, df)
-
-
+          
 ```
 
 
