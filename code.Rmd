@@ -5,13 +5,8 @@ date: "April 6, 2018"
 output: pdf_document
 ---
 
-<<<<<<< HEAD
 ```{r echo=FALSE}
 data <- read.csv("C:/Users/wangz/Desktop/UW/UW WINTER 2018-4A/STAT 444/Project/Stat-444-Final-Project/combined.csv", header=TRUE)
-=======
-```{r}
-data <- read.csv("combined.csv", header=TRUE)
->>>>>>> 8251b5d81bd9018b94381f35bb2912e4c0baf44d
 ##summary(data)
 data$WR = data$W/data$GP
 data$PRA = data$PTS + data$REB + data$AST + data$STL + data$BLK - data$TOV - data$FGM - data$FTM
@@ -47,7 +42,7 @@ m4 = lm(Salary ~ PLUSMINUS, data=SalaryU)
 ##hist(log(SalaryL$Salary))
 ```
 
-One of the most straight forward way to evaluate the performance of an NBA player is to look at his "Points per Game", "Assists per Game", and "Rebounds per Game", which are the 3 most popular statistics in NBA. We initially tried to find a relationship between the PRA(Points + Rebounds + Assists per game) and the Salary of an NBA player. However, we realized that it will almost always introduce a bias, because it does not tell us the full image of the player's ability. For example, Points are usually easier to get compared to Assists and Rebounds. When a player scores, they will either get two points or three points, potentially earning an extra Free Throw, which counts as one more point. When a player gets an Assist or a Rebound, the count only goes up by 1. Having 10 Rebounds or 10 Assists after a game is considered a good performance, but having 10 Points for a game is usually average. The PRA also introduces a heavier weight on the player's offensive ability than his defensive ability on the court, since Points, Assists, and Offensive Rebounds all happen at the front court. Therefore, we found a better way to determine the efficiency of an NBA player, which is to look at his EFF, calculated by EFF = PTS + REB + AST + STL + BLK − FGM − FTM - TO, where all variates are averaged per game. The EFF takes Steal (STL), Block (BLK), Field Goal Missed (FGM), Free Throw Missed (FTM), and Turn Over (TO) into account, which adds the defensive ability (STL and BLK) and inefficiency (FGM, FTM, TO) into the equation.
+One of the most straight forward way to evaluate the performance of an NBA player is to look at his "Points per Game", "Assists per Game", and "Rebounds per Game", which are the 3 most popular statistics in NBA. We initially tried to find a relationship between the PRA(Points + Rebounds + Assists per game) and the Salary of an NBA player. However, we realized that it will almost always introduce a bias, because it does not tell us the full image of the player's ability. For example, Points are usually easier to get compared to Assists and Rebounds. When a player scores, they will either get two points or three points, potentially earning an extra Free Throw, which counts as one more point. When a player gets an Assist or a Rebound, the count only goes up by 1. Having 10 Rebounds or 10 Assists after a game is considered a good performance, but having 10 Points for a game is usually average. The PRA also introduces a heavier weight on the player's offensive ability than his defensive ability on the court, since Points, Assists, and Offensive Rebounds all happen at the front court. Therefore, we found a better way to determine the efficiency of an NBA player, which is to look at his EFF, calculated by EFF = PTS + REB + AST + STL + BLK - FGM - FTM - TOV, where all variates are averaged per game. The EFF takes Steal (STL), Block (BLK), Field Goal Missed (FGM), Free Throw Missed (FTM), and Turn Over (TOV) into account, which adds the defensive ability (STL and BLK) and inefficiency (FGM, FTM, TO) into the equation.
 
 ```{r echo=FALSE}
 x = data$PRA
@@ -175,153 +170,7 @@ main = paste("Smoothing spline, df =", df)
 )
 lines(xnew, ypred.sm, col="steelblue", lwd=2)
 ```
-
-<<<<<<< HEAD
-```{r echo=FALSE}
-Xmat.ns <- ns(x, knots=knots_p)
-blim <- extendrange(Xmat.ns)
-=======
-```{r}
-## Cross Validation
-getmubar<-function(muhats) {
-  function(x){
-    Ans <-sapply(muhats, FUN=function(muhat){muhat(x)})
-    apply(Ans, MARGIN=1, FUN=mean)
-  }
-}
-ave_y_mu_sq <- function(sample, predfun){
-  mean(abs(sample$y - predfun(sample$x))^2)
-}
-ave_mu_mu_sq <- function(predfun1, predfun2,x){
-  mean((predfun1(x)- predfun2(x))^2)
-}
-
-apse <- function(Ssamples, Tsamlpes, fitFunc, df){
-  N_S <-length(Ssamples)
-  mean(sapply(1:N_S,
-       FUN = function(j){
-         S_j <- Ssamples[[j]]
-         muhat <- fitFunc(S_j, df=df)
-         T_j <- Tsamlpes[[j]]
-         ave_y_mu_sq(T_j,muhat)
-       })
-  )
-}
-
-kfold <-function(N,k=N,indices=NULL){
-  if (is.null(indices)) {
-    indices <-sample(1:N, N,replace=FALSE)
-    } else {
-      N <-length(indices)
-    }
-  
-  if (k >N)stop("k must not exceed N")
-  gsize <-rep(round(N/k), k)
-  extra <-N -sum(gsize)
-  if (extra >0) {
-    for (i in 1:extra) {
-      gsize[i] <-gsize[i] +1
-    }
-  }
-  if (extra <0) {
-    for (i in 1:abs(extra)) {
-      gsize[i] <-gsize[i] -1
-    }
-  }
-  running_total <-c(0,cumsum(gsize))
-  lapply(1:k,
-         FUN=function(i) {
-           indices[seq(from =1+running_total[i],
-                       to =running_total[i+1],
-                       by =1)]
-         }
-  )
-}
-getKfoldSamples <-function (x, y, k,indices=NULL){
-  groups <-kfold(length(x), k, indices)
-  Ssamples <-lapply(groups,
-                    FUN=function(group) {
-                      list(x=x[-group],y=y[-group])
-                      })
-  Tsamples <-lapply(groups,
-                    FUN=function(group) {
-                      list(x=x[group],y=y[group])
-                      })
-  list(Ssamples =Ssamples,Tsamples =Tsamples)
-}
-
-#named with testwithv because when you fold k you get v!
-testwithv <- function(x,y,k, fitFunc, df) {
-  samples = getKfoldSamples(x,y,k)
-  apse(samples$Ssamples, samples$Tsamples, fitFunc , df)
-  
-}
-
-k=5
-df = 3
-library(gbm)
-#replace fitFunc wtih your function
-testwithv(x,y,k,
-          fitFunc = function(sample, df){
-          boost <-gbm(formula = y~x, data=sample, n.trees=2500, distribution="gaussian", interaction.depth=1, bag.fraction=0.2, train.fraction=1, shrinkage=0.4)
-            muhat <- function(newX) {
-              
-              predict(boost, newdata = as.data.frame(newX), n.trees=100, type = "response")
-            }
-            muhat
-          }, df)
-
-#replace fitFunc wtih your function
-testwithv(x,y,k,
-          fitFunc = function(sample, df){
-            x=sample$x
-            y=sample$y
-          fit = lm(y~ bs(x, degree = p,knots = knots_p))
-            muhat <- function(newX) {
-              predict(fit, newdata = list(x=newX))
-            }
-            muhat
-          }, df)
-          
-```
-
-
-```{r}
-## Smoothing, lower salary
-library(splines)
-library(MASS)
-p <- 3
-x = SalaryL$PRA
-y = log(SalaryL$Salary)
-gap = data$SGap
-
-knots_p <- quantile(x, seq(0.1, 0.9, 0.1))
-Xmat <- bs(x, degree= p, knots=knots_p)
-Xorder <- order(x)
-blim <- extendrange(Xmat)
->>>>>>> 8251b5d81bd9018b94381f35bb2912e4c0baf44d
-parOptions <- par(mfrow = c(2,2))
-for (j in 1:ncol(Xmat.ns)) {
-  plot(x[Xorder], Xmat.ns[Xorder,j],
-    type="l",
-    ylim=blim,
-    xlim = extendrange(x),
-    xlab="EFF", ylab="Basis",
-    main=paste("ns basis vector", j),
-    col="firebrick")
-}
-
-par(parOptions)
-fit.bs <- lm(y ~ bs(x, degree= p, knots=knots_p))
-fit.ns <- lm(y ~ ns(x, knots=knots_p))
-# And now the predicted values for plotting
-ypred.bs <- predict(fit.bs, newdata= data.frame(x=xnew))
-ypred.ns <- predict(fit.ns, newdata= data.frame(x=xnew))
-plot(x,y,xlab="EFF", ylab="Salary",
-  col="grey80", pch=19, cex=0.5,
-  main = "Natural Cubic Spline")
-lines(xnew, ypred.ns, col="darkgreen", lwd=2, lty=1)
-```
+\newpage
 
 # Random Forest
 
@@ -362,7 +211,7 @@ We used PTS, REB, AST, TOV, STL, BLK, Team, WR, AGE, FGM, FGPER, TPM, TPPER, FTM
 
 The result suggests that the error of cross validation is the lowest for 10 explanatory variates, at about 1.19. We then choose the top 10 most important variates based on RSS, Team, MIN, FGM, PTS, AGE, REB, Draft.Round, PF, TOV, and FTM, and run the process again.
 
-```{r}
+```{r echo=FALSE}
 
 data.rfcv.10 <- randomForest(log(Salary) ~
                        Team + MIN + FGM + PTS + AGE + REB + Draft.Round + PF + TOV + FTM,
@@ -376,7 +225,7 @@ with(data.rfcv, plot(n.var, error.cv, pch = 19, type="b", col="blue"))
 ```
 The result from the second run suggests that the error of cross validation is the lowest when there are 5 explanatory variates, at around 1.19. We then choose the top 5 most important variates againbased on RSS, which are Team, MIN, FGM, PTS, and AGE, and run the process again.
 
-```{r}
+```{r echo=FALSE}
 
 data.rfcv.5 <- randomForest(log(Salary) ~
                        Team + MIN + FGM + PTS + AGE,
@@ -391,7 +240,7 @@ with(data.rfcv, plot(n.var, error.cv, pch = 19, type="b", col="blue"))
 The result from the third run suggests that the error of cross validation is the lowest when there are 5 explanatory variates, at around 1.59. We can say that the Team, MIN, FGM, PTS, and AGE are important variates based on cross validation. Also, AGE seems to be the most important for predictive purposes.
 
 To make a more sensible modelling exercise would consider how Salary might depend on just those explanatory variates that were under the control of the NBA player. Therefore, we removed Team, MIN, WR, AGE, Draft.Round, and PLUSMINUS. Age is obviously an uncontrollable variate. We think players rarely have control for Team, MIN, and Draft.Round since it does not depend on players' previous NBA performance, instead, these would depend on the decisions from coach and the organization Also, WR and PLUSMINUS have a lot to do with the teammates of the NBA player we are trying to analyze, so we decided to take these out of consideration as well. This move left us with 15 explanatory variates.
-```{r}
+```{r echo=FALSE}
 data.rf2 <- randomForest(log(Salary) ~
                            PTS + REB + AST + TOV + STL + BLK + FGM + FGPER + TPM + 
                            TPPER + FTM + FTPER + PF + Position + Country,
