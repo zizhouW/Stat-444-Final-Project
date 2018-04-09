@@ -1,0 +1,180 @@
+---
+title: "444 project code"
+author: "Zizhou Wang"
+date: "April 6, 2018"
+output: pdf_document
+---
+
+# Data
+
+  We first wanted to explore the distribution of Salary, since that is our preditive variable and arguably the most important variable. By graphing the variable, we realized it is heavily skewed, and we tried to fix this by applying a power transformation. After trying multiple different $\alpha$, we determined $\alpha=0$ ( i.e. log transformation ) gave the best result.
+
+```{r}
+data <- read.csv("./combined.csv", header=TRUE)
+data$WR = data$W/(data$W+data$L)
+par(mfrow=c(1,2))
+hist(data$Salary)
+hist(log(data$Salary))
+```
+
+  However, after the log transformation, the distribution of salary becomes bimodal. Intuitively, this is because there is a clear seperation of 
+salary between players just entering NBA on their first contract, and players on their subsequent contracts  This salary gap is expected because NBA is known to have a mostly standard salary for new players. We thought age might be a predictor of whether players are above or below the gap, but after plotting we see this is not the case. An possible explanation is certain players are entering NBA from the development league instead of out of college or highschool. Such players would be older, but their salary varies drastically. If they are pulled in to replace an injured player, they might still bein the middle of a development contract, in which case the salary would be very low. However, if they have proved themselves in the development league and is now signing a new contract with NBA, they might be paid above the salary gap.
+
+```{r}
+plot(data$AGE, log(data$Salary))
+```
+
+
+  There are couple groups of variables in our data that we know are each internally correlated. For \textbf{each} of the three ways to score 
+- field goals, three points, and free throws - there are three corresponding variates - number of attempted shots, number of made shots, and success percentage(number of made/number of attempted). For each of the ways to score, we only want to use one variate. Intuitively, it doesn't make sense to use number of attempts instead of the other two, so we only compare between number of made shots and success percentage. For each way to score, we fit a spline model for salary against shots made, and another spline model for salary against success percentage, and pick the variate corresponding to the model with lower BIC score.
+
+  It turns out number of shots made is always the preferred, and always has quite lower BIC score. This could be because some players take very few shots, so the variance in success percentage for these players is quite high and does not accurately reflect their skill level.
+
+
+```{r}
+library(splines)
+fgm <- lm(log(Salary) ~ bs(FGM, degree=4), data=data )
+fgper <- lm(log(Salary) ~ bs(FGPER, degree=4), data=data )
+BIC(fgm, fgper)
+
+tpm <- lm(log(Salary) ~ bs(TPM, degree=4), data=data )
+tpper <- lm(log(Salary) ~ bs(TPPER, degree=4), data=data )
+BIC(tpm, tpper)
+
+ftm <- lm(log(Salary) ~ bs(FTM, degree=4), data=data )
+ftper <- lm(log(Salary) ~ bs(FTPER, degree=4), data=data )
+BIC(ftm, ftper)
+```
+
+We chose to use degree of freedom of 4 with Bezier by testing different degrees of freedoms and comparing them with BIC. Let's graph salary
+vs field goal made to make sure 4 is a reasonable degree of freedom.
+
+```{r}
+y <- log(data$Salary)
+x <- data$FGM
+fit <- lm( y ~ bs(x, df=4) )
+xnew <- seq(min(x), max(x), length.out=515)
+ypred <- predict(fit,newdata=data.frame(x=xnew))
+plot(x, y, xlab="Field Goal Made", ylab="Log Salary",
+  col="grey80", pch=19, cex=0.5,
+  main = "Bezier Spline( df=4 )")
+lines(xnew, ypred, col="darkgreen", lwd=2, lty=1)
+```
+# Splines
+
+The variates we still have can be arranged into three groups: Offensive Stats, Defensive Stats, and Miscellaneous Stats.
+group 1: ( Total Points, Field Goals Made, Three Points Made, Free Throws Made, Assists, Turnovers ), 
+group 2:( Total Rebound, Offesive Rebound, Defensive Rebound, Steals, Blocks ), 
+group 3: ( Team, Age, Games Played, Win Rate, Minutes Played, PLUSMINUS, Position, Country ).
+
+We first want to explore if the relationships between offensive stats. We first look at scoreing stats, which 
+includes Field Goals Made, Three Points Made, and Free Throws Made. Interestingly, it seems at $alpha=0.05$, only field goals. 
+```{r}
+library(mgcv)
+off1 <- gam( log(Salary)~s(FGM)+s(TPM)+s(FTM), data=data )
+summary(off1)
+```
+This might be because the majority of points scored in NBA games are field goals, and is what coaches care most about.
+We also want to know if a model with total points would be better.
+
+```{r}
+off2 <- gam( log(Salary)~s(FGM), data=data)
+off3 <- gam( log(Salary)~s(PTS), data=data)
+BIC(off2, off3)
+```
+It seems that field goal alone is best.
+
+  The other offensive stats include assits and turnover. We are considering turnover as part of offensive stats because
+it indicates a lack of ability to score. We are now looking at Points, Assits, and Turnovers, and fit different models to
+implore their relationships.
+
+```{r}
+off1 <- gam( log(Salary)~s(FGM)+s(AST)+s(TOV), data=data)
+summary(off1)
+```
+
+It seems that at $\alpha=0.05$, Assists are not significant, and we should only use field goal and turnover.
+Let's explore if we should also include their interaction
+```{r}
+off1 <- gam( log(Salary)~s(PTS)+s(TOV), data=data)
+off2 <- gam( log(Salary)~s(PTS)+s(TOV)+ti(PTS, TOV), data=data)
+BIC(off1, off2)
+```
+By comparing the BIC values, it seems we should pick the model with no interaction.
+
+  Next we want to look at the defensive stats. Since earlier we oberved only the total number of points matter, we are curious to 
+know if offensive and defensive rebound can just be replaced with total number of rebound. Here, we fit a model against total number of rebound, and another model against offensive and defensive rebound, and a third model that include offensive-defensive interaction. After comparing the BIC of the three models, we decide to use only the total rebound.
+```{r}
+rebound <- gam( log(Salary) ~ s(REB), data=data )
+of_df <- gam( log(Salary) ~ s(OREB) + s(DREB), data=data )
+of_df_interact <- gam( log(Salary) ~ s(OREB) + s(DREB) + ti(OREB, DREB), data=data )
+BIC(rebound, of_df, of_df_interact)
+```
+We now want to explore the relationship between the remaining defensive stats: Total Rebound, Steals, and Blocks.
+Let's first look at a model fitted without any interaction.
+
+
+```{r}
+def1 <- gam( log(Salary)~s(REB)+s(STL)+s(BLK), data=data)
+summary(def1)
+```
+It seems at $\alpha=0.05$, blocks is not a significant varaite. Lets look at the relationship
+between the other variate - Rebound and Steal.
+
+```{r}
+def2 <- gam( log(Salary)~s(REB)+s(STL), data=data)
+def3 <- gam( log(Salary)~s(REB)+s(STL)+ti(REB, STL), data=data)
+BIC(def1, def2, def3)
+```
+The model with only Rebound and Steal without interaction has a much lower BIC score, and is the one we will use.
+
+We now want to look at the miscellaneous varaites - Team, Age, Games Played, Win Rate, Minutes Played, PLUSMINUS, Position, Country.
+Minutes played should be correlated with games played. Let's see if we need both of them.
+
+```{r}
+misc1 <- gam( log(Salary) ~ s(MIN), data=data )
+misc2 <- gam( log(Salary) ~ s(MIN) + s(GP), data=data)
+misc3 <- gam( log(Salary) ~ s(MIN) + s(GP) + ti(MIN, GP), data=data)
+BIC(misc1, misc2, misc3)
+```
+Interestingly, it does seem that we should have both minutes played and games played. Let's see the summary of the model with both variates.
+```{r}
+summary(misc2)
+```
+At $\alpha=0.05$, we can't reject either variates. 
+
+Let's fit a model with all the numerical miscellaneous variates without interaction.
+```{r}
+misc1 <- gam( log(Salary) ~ s(GP) + s(WR) + s(MIN) + s(PLUSMINUS), data=data )
+summary(misc1)
+```
+
+It seems all the variates are significant. Let's test them for pairwise interactions.
+
+```{r}
+misc2 <- gam( log(Salary) ~ s(GP) + s(WR) + s(MIN) + s(PLUSMINUS) + ti(GP, WR), data=data )
+misc3 <- gam( log(Salary) ~ s(GP) + s(WR) + s(MIN) + s(PLUSMINUS) + ti(GP, MIN), data=data )
+misc4 <- gam( log(Salary) ~ s(GP) + s(WR) + s(MIN) + s(PLUSMINUS) + ti(GP, PLUSMINUS), data=data )
+misc5 <- gam( log(Salary) ~ s(GP) + s(WR) + s(MIN) + s(PLUSMINUS) + ti(WR, MIN), data=data )
+misc6 <- gam( log(Salary) ~ s(GP) + s(WR) + s(MIN) + s(PLUSMINUS) + ti(WR, PLUSMINUS), data=data )
+misc7 <- gam( log(Salary) ~ s(GP) + s(WR) + s(MIN) + s(PLUSMINUS) + ti(MIN, PLUSMINUS), data=data )
+BIC(misc1, misc2, misc3, misc4, misc5, misc6, misc7)
+```
+
+It seems the model with interaction between Win Rate and Plus Minus is the best. Let's look at the summary.
+```{r}
+summary(misc6)
+```
+
+It seems once the interaction between Win Rate and Plus Minus is introduced, Plus Minus alone is no longer significant.
+
+Our final model should include the offensive, defensive, and miscellaneous variables we explored, with the interactions we explored.
+It is infeasible to test all the possible combinations of interaction between all these variables, so we will assume there is no cross-group
+interaction. Let's look at the summary of the fitted model.
+
+```{r}
+fit <- gam( log(Salary) ~ s(PTS) + s(TOV) + s(REB) + s(STL) + s(GP) + s(WR) + s(MIN) + ti(WR, PLUSMINUS), data=data )
+summary(fit)
+```
+
+

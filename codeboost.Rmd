@@ -7,12 +7,12 @@ output: pdf_document
 
 ```{r}
 data <- read.csv("combined.csv", header=TRUE)
-install.packages("gbm")
+##install.packages("gbm")
 ```
 Preparation
 
 ```{r}
-library("gbm")
+library(gbm)
 formula = "log(Salary)~ Team + AGE + GP + PTS + MIN+REB + AST + TOV + STL + BLK + FGM + FGPER + TPM + 
                            TPPER + FTM + FTPER + PF + Position +FP+ Country + PLUSMINUS + Draft.Number"
 explain_data = data[,c("Salary","PTS", "Team", "AGE","MIN", "GP",  "PLUSMINUS", "Draft.Number", "REB", "AST", "TOV", "STL", "BLK", "FGM", "FGPER", "TPM", "TPPER", "FTM", "FTPER", "PF", "Position", "Country", "FP")]
@@ -20,7 +20,7 @@ explain_data = data[,c("Salary","PTS", "Team", "AGE","MIN", "GP",  "PLUSMINUS", 
 set.seed(20180409)
 M = 2500;
 k=5
-boostFit$cv.error[M]
+##boostFit$cv.error[M]
 boostFit <-fb.boost.shrink <-gbm(as.formula(formula),
                                 data=explain_data,
                                 distribution ="gaussian",
@@ -81,7 +81,7 @@ Mvals <-numeric(length =n_alphas)
 fit <-list(length =n_alphas)
 for (i in 1:n_alphas) {
   set.seed(20180409)
-  fit[[i]] <-fb.boost.shrink <-gbm(as.formula(formula),
+  fit[[i]] <- nba.boost.shrink <-gbm(as.formula(formula),
                                 data=explain_data,
                                 distribution ="gaussian",
                                 shrinkage =alphas[i],
