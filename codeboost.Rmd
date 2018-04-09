@@ -1,0 +1,273 @@
+---
+title: "444 project code"
+author: "Zizhou Wang"
+date: "April 6, 2018"
+output: pdf_document
+---
+
+```{r}
+data <- read.csv("combined.csv", header=TRUE)
+##summary(data)
+data$WR = data$W/data$GP
+data$PRA = data$PTS + data$REB + data$AST - data$TOV + data$STL + data$BLK
+SalaryU = data[data$SGap == 1,]
+SalaryL = data[data$SGap == 0,]
+SalaryU$lSalary = log(SalaryU$Salary)
+SalaryU$PRA = SalaryU$PTS + SalaryU$REB + SalaryU$AST - SalaryU$TOV + SalaryU$STL + SalaryU$BLK
+SalaryU$WR = SalaryU$W/SalaryU$GP
+SalaryL$lSalary = log(SalaryL$Salary)
+SalaryL$PRA = SalaryL$PTS + SalaryL$REB + SalaryL$AST - SalaryL$TOV + SalaryL$STL + SalaryL$BLK
+SalaryL$WR = SalaryL$W/SalaryL$GP
+head(data)
+m1 = lm(PRA ~ Salary, data=SalaryU)
+m2 = lm(Salary ~ PRA, data=SalaryU)
+m3 = lm(Salary ~ WR, data=SalaryU)
+m4 = lm(Salary ~ PLUSMINUS, data=SalaryU)
+##summary(m1)
+##plot(m1)
+##plot(SalaryU$Salary, SalaryU$PRA)
+##abline(m1)
+##plot(SalaryU$PRA, SalaryU$Salary)
+##abline(m2)
+##SalaryU$PRA = SalaryU$PTS/2 + SalaryU$REB + SalaryU$AST
+##plot(SalaryU$PRA, SalaryU$Salary, main='less')
+##abline(m2)
+##plot(SalaryU$WR, SalaryU$Salary)
+##abline(m3)
+##plot(SalaryU$PLUSMINUS, SalaryU$Salary)
+##abline(m4)
+##(log(data$Salary))
+##hist(data$Salary)
+##hist(log(SalaryU$Salary))
+##hist(log(SalaryL$Salary))
+```
+
+```{r}
+x = data$PRA
+y = log(data$Salary)
+breaks_v <- seq(min(x), max(x), length.out=15)
+nbhd_v <- cut(x,
+  breaks= breaks_v,
+  include.lowest=TRUE
+)
+# varying size, constant proportions
+breaks_p <- c(quantile(x, seq(0,1,0.1) ))
+nbhd_p <- cut(x,
+  breaks=breaks_p,
+  include.lowest=TRUE
+)
+
+local_v <- levels(nbhd_v)
+local_p <- levels(nbhd_p)
+# Compute the local averages
+get_ave <- function(locals, nbhds) {
+mu <- vector(mode="numeric", length=length(x))
+for (i in 1:length(locals)) {
+nbhd_i <- nbhds == locals[i]
+mu[nbhd_i] <- mean(y[nbhd_i])
+}
+mu
+}
+mu_v <- get_ave(local_v, nbhd_v)
+mu_p <- get_ave(local_p, nbhd_p)
+# A quick and dirty way to draw the mu by neighbourhood
+plot_ave <- function(locals,
+nbhds,
+x,
+mu,
+...)
+{for (i in 1:length(locals)) {
+nbhd_i <- nbhds == locals[i]
+newx <- x[nbhd_i]
+newmu <- mu[nbhd_i]
+Xorder <- order(newx)
+if(length(newx)==1){
+lines(rep(newx[Xorder],2),
+rep(newmu[Xorder],2),
+...)
+} else {
+lines(newx[Xorder], newmu[Xorder], ...)
+}
+}
+}
+# plot
+plot(x,y,
+col="grey80", pch=19, cex=0.5,
+main = "Constant width nbhd")
+plot_ave(local_v, nbhd_v, x, mu_v,
+col="blue", lwd=5)
+plot(x,y,
+col="grey80", pch=19, cex=0.5,
+main = "Constant proportion nbhd")
+plot_ave(local_p, nbhd_p, x, mu_p,
+col="red", lwd=5)
+```
+
+```{r}
+## Smoothing, all
+library(splines)
+library(MASS)
+p <- 3
+x = data$PRA
+y = log(data$Salary)
+gap = data$SGap
+
+knots_p <- quantile(x, seq(0.1, 0.9, 0.1))
+Xmat <- bs(x, degree= p, knots=knots_p)
+Xorder <- order(x)
+blim <- extendrange(Xmat)
+parOptions <- par(mfrow = c(2,2))
+for (j in 1:ncol(Xmat)) {
+  plot(x[Xorder], Xmat[Xorder,j],
+  type="l",
+  ylim=blim,
+  xlim = extendrange(x),
+  xlab="x", ylab="Basis",
+  main=paste("Basis vector", j),
+  col="steelblue")
+}
+par(parOptions)
+## cubic spline
+fit <- lm(y ~ bs(x, degree= p, knots=knots_p))
+xrange <- extendrange(x)
+xnew <- seq(min(xrange), max(xrange), length.out=515)
+ypred <- predict(fit,newdata=data.frame(x=xnew))
+plot(x,y,xlab="PRA", ylab="Salary",
+  col="grey80", pch=19, cex=0.5,
+  main = "Cubic Spline")
+lines(xnew, ypred, col="darkgreen", lwd=2, lty=1)
+
+## bisqure
+fit2 <- rlm(y ~ bs(x, degree= p, knots=knots_p), psi=psi.bisquare)
+ypred2 <- predict(fit2,newdata=data.frame(x=xnew))
+plot(x,y,xlab="PRA", ylab="Salary",
+  col="grey80", pch=19, cex=0.5,
+  main = "Bisquare fit cubic spline")
+lines(xnew, ypred2, col="firebrick", lwd=2, lty=1)
+
+## smoothing spling
+df <- 10
+sm <- smooth.spline(x, y, df = df)
+ypred.sm <- predict(sm, x=xnew)$y
+plot(x,y,
+col="grey80", pch=19, cex=0.5,
+main = paste("Smoothing spline, df =", df)
+)
+lines(xnew, ypred.sm, col="steelblue", lwd=2)
+```
+```{r}
+## Smoothing, upper salary
+library(splines)
+library(MASS)
+p <- 3
+x = SalaryU$PRA
+y = log(SalaryU$Salary)
+gap = data$SGap
+
+knots_p <- quantile(x, seq(0.1, 0.9, 0.1))
+Xmat <- bs(x, degree= p, knots=knots_p)
+Xorder <- order(x)
+blim <- extendrange(Xmat)
+parOptions <- par(mfrow = c(2,2))
+for (j in 1:ncol(Xmat)) {
+  plot(x[Xorder], Xmat[Xorder,j],
+  type="l",
+  ylim=blim,
+  xlim = extendrange(x),
+  xlab="x", ylab="Basis",
+  main=paste("Basis vector", j),
+  col="steelblue")
+}
+par(parOptions)
+## cubic spline
+fit <- lm(y ~ bs(x, degree= p, knots=knots_p))
+xrange <- extendrange(x)
+xnew <- seq(min(xrange), max(xrange), length.out=515)
+ypred <- predict(fit,newdata=data.frame(x=xnew))
+plot(x,y,xlab="PRA", ylab="Salary",
+  col="grey80", pch=19, cex=0.5,
+  main = "Cubic Spline")
+lines(xnew, ypred, col="darkgreen", lwd=2, lty=1)
+
+## bisqure
+fit2 <- rlm(y ~ bs(x, degree= p, knots=knots_p), psi=psi.bisquare)
+ypred2 <- predict(fit2,newdata=data.frame(x=xnew))
+plot(x,y,xlab="PRA", ylab="Salary",
+  col="grey80", pch=19, cex=0.5,
+  main = "Bisquare fit cubic spline")
+lines(xnew, ypred2, col="firebrick", lwd=2, lty=1)
+
+## smoothing spling
+df <- 7
+sm <- smooth.spline(x, y, df = df)
+ypred.sm <- predict(sm, x=xnew)$y
+plot(x,y,
+col="grey80", pch=19, cex=0.5,
+main = paste("Smoothing spline, df =", df)
+)
+lines(xnew, ypred.sm, col="steelblue", lwd=2)
+```
+```{r}
+
+library("gbm")
+formula = "log(Salary)~PTS + REB + AST + TOV + STL + BLK + FGM + FGPER + TPM + 
+                           TPPER + FTM + FTPER + PF + Position + Country"
+explain_data = data[,c("Salary","PTS", "REB", "AST", "TOV", "STL", "BLK", "FGM", "FGPER", "TPM", "TPPER", "FTM", "FTPER", "PF", "Position", "Country")]
+M = 2500;
+
+alphas <-c(0.005,0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08,0.09,0.10,0.20,0.30,0.40,0.50,0.60,0.70,0.80,0.90,1)
+n_alphas <-length(alphas)
+cverror <-numeric(length =n_alphas)
+Mvals <-numeric(length =n_alphas)
+fit <-list(length =n_alphas)
+for (i in 1:n_alphas) {
+  set.seed(20180409)
+  fit[[i]] <-fb.boost.shrink <-gbm(as.formula(formula),
+                                data=explain_data,
+                                distribution ="gaussian",
+                                shrinkage =alphas[i],
+                                n.trees =M,
+                                bag.fraction =1,
+                                cv.folds =k,
+                                n.minobsinnode= 3)
+  cverror[i] <-min(fit[[i]]$cv.error)
+  
+  Mvals[i] <-which.min(fit[[i]]$cv.error)
+  }
+plot(alphas, cverror,type ="b",col =adjustcolor("firebrick",0.7),pch=19,lwd=2,main ="cross-validated error",xlab ="shrinkage",ylab="cv.error")
+          
+```
+Best learning rate around 0-0.2, with cv error around 1.71
+
+
+```{r}
+
+library("gbm")
+formula = "log(Salary)~Team + Draft.Round + MIN + FGM + TOV"
+explain_data = data[,c("Salary","Team", "Draft.Round", "MIN", "FGM", "TOV")]
+M = 2500;
+
+alphas <-c(0.005,0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08,0.09,0.10,0.20,0.30,0.40,0.50,0.60,0.70,0.80,0.90,1)
+n_alphas <-length(alphas)
+cverror <-numeric(length =n_alphas)
+Mvals <-numeric(length =n_alphas)
+fit <-list(length =n_alphas)
+for (i in 1:n_alphas) {
+  set.seed(20180409)
+  fit[[i]] <-fb.boost.shrink <-gbm(as.formula(formula),
+                                data=explain_data,
+                                distribution ="gaussian",
+                                shrinkage =alphas[i],
+                                n.trees =M,
+                                bag.fraction =1,
+                                cv.folds =k,
+                                n.minobsinnode= 3)
+  cverror[i] <-min(fit[[i]]$cv.error)
+  
+  Mvals[i] <-which.min(fit[[i]]$cv.error)
+  }
+plot(alphas, cverror,type ="b",col =adjustcolor("firebrick",0.7),pch=19,lwd=2,main ="cross-validated error",xlab ="shrinkage",ylab="cv.error")
+          
+```
+Best learning rate between 0 and 0.3, with cv error around 1.51  
+
