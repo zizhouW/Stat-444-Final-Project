@@ -1,0 +1,9 @@
+# Future Works
+
+## Use Win Shares instead of Plus or Minus.
+
+We initially thought that PLUSMINUS would be a very important factor in determining if the player is top of the league or not. It turns out that it is not very significant for individual players when it is modeled against salary. We think that the reason behind this is because PLUSMINUS measures the difference between the points the team scores and the points the team loses when the player is on the court, which does not only depend on individual ability, but instead the ability of all 5 players on the court. Also, coaches tend to put the best players on the court when the other team has their best players on the court, so on average, players on the court from the two teams would not have a high skills difference. Therefore, we figured that the PLUSMINUS will not have a significant impact on the players' salary.
+
+Win Share, on the other hand, is a player statistic which is designed to estimate a player's contribution in terms of the team's wins. More information about utilizing win share in NBA can be found on https://www.basketball-reference.com/about/ws.html. We believe using Win Share instead of Plus or Minus in our model will make our model more accurate. 
+
+We did more research later into our project, and realized that players who have higher Plus or Minus are usually not the players who are the best in the NBA, but players who are on teams that have a high Win Rate (e.g. Eric Gordon, ranked 3rd in Plus or Minus, member of Huston Rockets who has the highest win rate among all NBA teams this year, ranked 90th in salary). In addition, 4 players out of the top 10 in Plus or Minus are from Huston Rockets. On the other hand, according to https://www.basketball-reference.com/leagues/NBA_2018_advanced.html, the top 10 players in Win Share are all from different teams, who are also arguably the best players in their respective teams.

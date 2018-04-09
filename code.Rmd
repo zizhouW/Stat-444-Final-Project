@@ -14,7 +14,6 @@ After seeing our final dataset, we raised the question of if it is possible to p
 ```{r}
 data <- read.csv("./combined.csv", header=TRUE)
 data$WR = data$W/data$GP
-data$PRA = data$PTS + data$REB + data$AST + data$STL + data$BLK - data$TOV - data$FGM - data$FTM
 head(data)
 ```
 
@@ -22,6 +21,7 @@ head(data)
 One of the most straight forward way to evaluate the performance of an NBA player is to look at his "Points per Game", "Assists per Game", and "Rebounds per Game", which are the 3 most mentioned statistics when NBA analysts and fans make comparison to players. We initially tried to find a relationship between the PRA(Points + Rebounds + Assists per game) and the Salary of an NBA player. However, we realized that it will almost always introduce a bias, because it does not tell us the full image of the player's ability. For example, Points are usually easier to get compared to Assists and Rebounds. When a player scores, they will either get two points or three points, potentially earning an extra Free Throw, which counts as one more point. When a player gets an Assist or a Rebound, the count only goes up by 1. Having 10 Rebounds or 10 Assists after a game is considered a good performance, but having 10 Points for a game is usually average. The PRA also introduces a heavier weight on the player's offensive ability than his defensive ability on the court, since Points, Assists, and Offensive Rebounds all happen at the front court. Therefore, we found a better way to determine the efficiency of an NBA player, which is to look at his EFF, calculated by EFF = PTS + REB + AST + STL + BLK - FGM - FTM - TOV, where all variates are averaged per game. The EFF takes Steal (STL), Block (BLK), Field Goal Missed (FGM), Free Throw Missed (FTM), and Turn Over (TOV) into account, which adds the defensive ability (STL and BLK) and inefficiency (FGM, FTM, TO) into the equation.
 
 ```{r echo=FALSE}
+data$PRA = data$PTS + data$REB + data$AST + data$STL + data$BLK - data$TOV - data$FGM - data$FTM
 x = data$PRA
 y = log(data$Salary)
 breaks_v <- seq(min(x), max(x), length.out=15)
@@ -326,9 +326,7 @@ data.rfcv.5 <- randomForest(log(Salary) ~
                       data = data,
                       importance = TRUE)
 trainx <- data[, get.explanatory_varnames(data.rfcv.5)]
-# Five fold cross-validataion
 data.rfcv <- rfcv(trainx = trainx, trainy = trainy, cv.fold = 5)
-# We can plot the results
 with(data.rfcv, plot(n.var, error.cv, pch = 19, type="b", col="blue"))
 ```
 The result from the third run suggests that the error of cross validation is the lowest when there are 5 explanatory variates, at around 1.64. We can say that the Team, MIN, FGM, PTS, and AGE are important variates based on cross validation. Also, AGE seems to be the most important for predictive purposes.
@@ -348,9 +346,7 @@ importance(data.rf2, type=1) #average decrease in the accuracy of predictions
 varImpPlot(data.rf2)
 trainy2 <- log(data[,"Salary"])
 trainx2 <- data[, get.explanatory_varnames(data.rf2)]
-# Five fold cross-validataion
 data.rfcv2 <- rfcv(trainx = trainx2, trainy = trainy2, cv.fold = 5)
-# We can plot the results
 with(data.rfcv2, plot(n.var, error.cv, pch = 19, type="b", col="blue")) 
 ```
 The cross validation suggests that all 15 explanatory variates are important, at an error of around 1.58. The result also suggests that FGM, TOV, REB, and PTS are the most important.
@@ -359,20 +355,26 @@ The cross validation suggests that all 15 explanatory variates are important, at
 
 # Boosting
 
+We then used the Gradient Boosting method to determine the importance of explanatory variates, and see if it shows a different result compared to Random Forest.
+
 ```{r echo=FALSE}
 library(gbm)
-formula = "log(Salary)~ Team + AGE + GP + PTS + MIN+REB + AST + TOV + STL + BLK + FGM + FGPER + TPM + 
-                           TPPER + FTM + FTPER + PF + Position +FP+ Country + PLUSMINUS + Draft.Number"
-explain_data = data[,c("Salary","PTS", "Team", "AGE","MIN", "GP",  "PLUSMINUS", "Draft.Number", "REB", "AST", "TOV", "STL", "BLK", "FGM", "FGPER", "TPM", "TPPER", "FTM", "FTPER", "PF", "Position", "Country", "FP")]
+formula = "log(Salary)~ Team + AGE + PTS + MIN+REB + AST + TOV + STL +
+            BLK + FGM + FGPER + TPM + TPPER + FTM + FTPER + PF + 
+            Position + Country + PLUSMINUS + Draft.Round + WR"
+explain_data = data[,c("Salary","PTS", "Team", "AGE","MIN", "PLUSMINUS", 
+                       "Draft.Round", "REB", "AST", "TOV", "STL", "BLK", 
+                       "FGM", "FGPER", "TPM", "TPPER", "FTM", "FTPER", 
+                       "PF", "Position", "Country", "WR")]
 
-set.seed(20180409)
+set.seed(54321)
 M = 2500;
 k=5
 ##boostFit$cv.error[M]
 boostFit <-nba.boost.shrink <-gbm(as.formula(formula),
                                 data=explain_data,
                                 distribution ="gaussian",
-                                shrinkage =0.05,
+                                shrinkage = 0.05,
                                 n.trees =M,
                                 bag.fraction =1,
                                 cv.folds =k,
@@ -381,20 +383,28 @@ boostFit <-nba.boost.shrink <-gbm(as.formula(formula),
 
 summary(boostFit, main="Effect of each attribute")
 ```
-Games Played, Draft Number, Age and Minutes played are the four major ones. Since Games player and Minutes played are expected to see some correlation, we only take games played into account in our next part. Individual personal statistics such as blcok and assistant are less relavant in this case.
+We used PTS, REB, AST, TOV, STL, BLK, Team, WR, AGE, FGM, FGPER, TPM, TPPER, FTM, FTPER, PF, PLUSMINUS, Position, Country, MIN, and Draft.Round against log(Salary), which is the same as what we used for Random Forest.
+
+The result shows that Draft Round, Minutes played, and Age are the 3 major variates, with much higher influece over others.
 
 ```{r echo=FALSE}
-library("gbm")
-formula = "log(Salary)~ GP + Draft.Number + AGE"
-explain_data = data[,c("Salary","Draft.Number", "GP", "AGE")]
-alphas <-c(0.005,0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08,0.09,0.10,0.20,0.30,0.40,0.50,0.60,0.70,0.80,0.90,1)
+formula = "log(Salary)~ Team + AGE + PTS + MIN+REB + AST + TOV + STL + 
+          BLK + FGM + FGPER + TPM + TPPER + FTM + FTPER + PF + Position + 
+          Country + PLUSMINUS + Draft.Round + WR"
+explain_data = data[,c("Salary","PTS", "Team", "AGE","MIN", "PLUSMINUS", 
+                      "Draft.Round", "REB", "AST", "TOV", "STL", "BLK", "FGM",
+                      "FGPER", "TPM", "TPPER", "FTM", "FTPER", "PF", 
+                      "Position", "Country", "WR")]
+
+alphas <-c(0.005,0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08,
+           0.09,0.10,0.20,0.30,0.40,0.50,0.60,0.70,0.80,0.90,1)
 n_alphas <-length(alphas)
 cverror <-numeric(length =n_alphas)
 Mvals <-numeric(length =n_alphas)
 fit <-list(length =n_alphas)
 for (i in 1:n_alphas) {
-  set.seed(20180409)
-  fit[[i]] <-nba.boost.shrink <-gbm(as.formula(formula),
+  set.seed(54321)
+  fit[[i]] <- nba.boost.shrink <-gbm(as.formula(formula),
                                 data=explain_data,
                                 distribution ="gaussian",
                                 shrinkage =alphas[i],
@@ -406,30 +416,79 @@ for (i in 1:n_alphas) {
   
   Mvals[i] <-which.min(fit[[i]]$cv.error)
   }
-plot(alphas, cverror,type ="b",col =adjustcolor("firebrick",0.7),pch=19,lwd=2,main ="cross-validated error",xlab ="shrinkage",ylab="cv.error")
-          
+plot(alphas, cverror,type ="b",
+     col =adjustcolor("firebrick",0.7),
+     pch=19,lwd=2,main ="cross-validated error",
+     xlab ="shrinkage",ylab="cv.error")
 ```
-Best learning rate around 0.4, with cv error around 1.38
-
+We see that the best learning rate for these 21 explainatory variates is at around 0.06, with cv error around 1.15
 
 ```{r echo=FALSE}
+alpha <- 0.06
+k <- 5
+# Shrinkage parameter values
+Ms <- c(50, 100, 150, 200, 250, 300, 400, 500)
+n_Ms <- length(Ms)
+cverror <- numeric(length = n_Ms)
+Mvals <- numeric(length = n_Ms)
+fit <- list(length = n_Ms)
+for (i in 1:n_Ms) {
+  set.seed(54321)
+  fit[[i]] <- nba.boost.shrink <- gbm(as.formula(formula),
+                                  data=explain_data,
+                                  distribution = "gaussian",
+                                  shrinkage = alpha,
+                                  n.trees = Ms[i],
+                                  bag.fraction = 1,
+                                  cv.folds = k
+  )
+  cverror[i] <- min(fit[[i]]$cv.error)
+}
+plot(Ms, cverror, type = "b",
+     col = adjustcolor("firebrick", 0.7), pch=19, lwd=2,
+     main = "cross-validated error", 
+     xlab = "Number of trees", ylab="cv.error")
+```
+We see that the best value for M for more explainatory variables is at about 150, with cv error around 1.16. We can see that the return is very small when M is bigger than 150.
 
-#With more explainatory variables > 1
+## Player self-evaluate and improvements
+
+We want to do the same thing in boosting for what we did in random tree, allowing players to see what they need to improve on the most to get a higher salary. Again, we removed Team, MIN, WR, AGE, Draft.Round, and PLUSMINUS, and repeated the process.
+
+```{r echo=FALSE}
+formula = "log(Salary)~ PTS + REB + AST + TOV + STL + BLK + FGM + FGPER + TPM + 
+                           TPPER + FTM + FTPER + PF + Position + Country"
+explain_data = data[,c("Salary","PTS", "REB", "AST", "TOV", "STL", "BLK", "FGM",
+                       "FGPER", "TPM", "TPPER", "FTM", "FTPER", "PF", "Position", "Country")]
+
+set.seed(54321)
+M = 2500;
+k=5
+##boostFit$cv.error[M]
+boostFit <-nba.boost.shrink <-gbm(as.formula(formula),
+                                data=explain_data,
+                                distribution ="gaussian",
+                                shrinkage = 0.05,
+                                n.trees =M,
+                                bag.fraction =1,
+                                cv.folds =k,
+                                n.minobsinnode= 3)
 
 
-library("gbm")
-formula = "log(Salary)~ GP+Draft.Number+AGE+MIN+FP+Country+FTPER+FGM+Team+TOV+FGPER+PLUSMINUS+REB+Position"
-explain_data = data[,c("Salary","GP","Draft.Number","AGE","MIN","FP","Country",
-                       "FTPER","FGM","Team","TOV","FGPER","PLUSMINUS","REB","Position")]
+summary(boostFit, main="Effect of each attribute")
+```
+The result shows that PTS is the most important variable here, REB is the second most important, with TOV, FGM, FTPER, PF, and FGPER at 3rd to 7th, which are very close with each other.
 
-alphas <-c(0.005,0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08,0.09,0.10,0.20,0.30,0.40,0.50,0.60,0.70,0.80,0.90,1)
+```{r echo=FALSE}
+alphas <-c(0.005,0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08,
+           0.09,0.10,0.20,0.30,0.40,0.50,0.60,0.70,0.80,0.90,1)
 n_alphas <-length(alphas)
 cverror <-numeric(length =n_alphas)
 Mvals <-numeric(length =n_alphas)
 fit <-list(length =n_alphas)
 for (i in 1:n_alphas) {
-  set.seed(20180409)
-  fit[[i]] <-nba.boost.shrink <-gbm(as.formula(formula),
+  set.seed(54321)
+  fit[[i]] <- nba.boost.shrink <-gbm(as.formula(formula),
                                 data=explain_data,
                                 distribution ="gaussian",
                                 shrinkage =alphas[i],
@@ -441,7 +500,38 @@ for (i in 1:n_alphas) {
   
   Mvals[i] <-which.min(fit[[i]]$cv.error)
   }
-plot(alphas, cverror,type ="b",col =adjustcolor("firebrick",0.7),pch=19,lwd=2,main ="cross-validated error",xlab ="shrinkage",ylab="cv.error")
-          
+plot(alphas, cverror,type ="b",
+     col =adjustcolor("firebrick",0.7),
+     pch=19,lwd=2,main ="cross-validated error",
+     xlab ="shrinkage",ylab="cv.error")
 ```
-Best learning rate for more explainatory variables is at around 0.3, with cv error around 1.21  
+We see that the best learning rate for these 15 explainatory variates is also at around 0.06, with cv error around 1.66.
+
+```{r echo=FALSE}
+alpha <- 0.06
+k <- 5
+# Shrinkage parameter values
+Ms <- c(50, 100, 150, 200, 250, 300, 400, 500)
+n_Ms <- length(Ms)
+cverror <- numeric(length = n_Ms)
+Mvals <- numeric(length = n_Ms)
+fit <- list(length = n_Ms)
+for (i in 1:n_Ms) {
+  set.seed(54321)
+  fit[[i]] <- nba.boost.shrink <- gbm(as.formula(formula),
+                                  data=explain_data,
+                                  distribution = "gaussian",
+                                  shrinkage = alpha,
+                                  n.trees = Ms[i],
+                                  bag.fraction = 1,
+                                  cv.folds = k
+  )
+  cverror[i] <- min(fit[[i]]$cv.error)
+}
+plot(Ms, cverror, type = "b", 
+     col = adjustcolor("firebrick", 0.7), pch=19, lwd=2,
+     main = "cross-validated error", xlab = "Number of trees", ylab="cv.error")
+```
+
+
+We see that the best value for M for more explainatory variables is also at about 200, with cv error around 1.66. We can see that the return is very small when M is bigger than 200.
