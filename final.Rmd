@@ -1,9 +1,10 @@
 ---
-title: "Stat 444 Final Project - Team UWaterloo"
-author: "Zizhou Wang, MingHao Lu,Zhaoyang Wang"
-date: "April 6, 2018"
-output: pdf_document
+output: 
+  pdf_document:
+      toc: true
 ---
+
+\newpage
 
 # Motivation and introduction of the problem
 
@@ -24,13 +25,13 @@ During the process of matching players' stats/profile with their salaries, we en
 
 For the "Position" categorical variable in our dataset, we stated in our proposal that we would be using 5 values, PG (Point Guard), SG (Shooting Guard), SF (Small Forward), PF (Power Forward), and C (Center). It turns out that many guards in the NBA today are "combo guards", which means they can both play at the Point Guard and Shooting Guard position (e.g. James Harden). There are also many forwards in the NBA who can both play at the Small Forward and Power Forward position (e.g. Lebron James). We reduced the number of values to 3, grouping PG and SG as G (Guard), SF and PF as F (Forward). In addition, there are some players who are "swingman", meaning they can both play at the SG and SF position (e.g. Jimmy Butler). Since this is not a frequent case, we chose a position for each of them based on which position they had mostly been playing at this season (2017-2018) and our understanding of their strength. Because of such swing players, we went through all the data by hand and assigned the most apprioriate role to our knowlege.
 
-Our final data set contains 515 records and does not contain any N/A's.
+Our final data set contains 515 records and does not contain any N/A's. Our major explanatory variates are: PTS (Points), REB (Rebounds), AST (Assists), TOV (Turn Overs), STL (Steals), BLK (Blocks), Team, WR (Win Rate), AGE, FGM (Field Goals Made), FGPER (Field Goals Percentage), TPM (Three Points Made), TPPER (Three Point Percentage), FTM (Free Throw Made), FTPER (Free Throw Percentage), PF (Personal Fouls), PLUSMINUS (Plus or Minus), Position, Country, MIN (Minutes), and Draft.Round. Some of these variates are per game statistics, including PTS, REB, AST, TOV, STL, BLK, FGM, TPM, FTM, PF, and MIN.
 
 We then realized a couple outliers in our dataset. For example, Gordon Hayward was horribly injured during his very first game at the beginning of the year. He was not able to return for the rest of the season. With the 4th highest salary on our list, he would be an extreme outlier in our models with minimal statistical contribution. However, this does not mean that he is not worth the salary, since he was only able to play for about 5 minutes before the injury. However, there are only a few exceptions we think the techniques we use should be robust enough
 to handle them.
 
 
-```{r}
+```{r echo=FALSE}
 data <- read.csv("./combined.csv", header=TRUE)
 head(data, n=3)
 ```
@@ -38,7 +39,7 @@ head(data, n=3)
 We first wanted to explore the distribution of Salary, since that is our preditive variable and arguably the most important variable.
 By graphing the variable, we realized it is heavily skewed, and we tried to fix this by applying a power transformation. After trying multiple different $\alpha$, we determined $\alpha=0$ ( i.e. log transformation ) gave the best result.
 
-```{r}
+```{r echo=FALSE}
 par(mfrow=c(1,2))
 hist(data$Salary)
 hist(log(data$Salary))
@@ -47,7 +48,7 @@ hist(log(data$Salary))
   However, after the log transformation, the distribution of salary becomes bimodal. Intuitively, this is because there is a clear seperation of 
 salary between players just entering NBA on their first contract, and players on their subsequent contracts  This salary gap is expected because NBAis known to have a mostly standard salary for new players. We thought age might be a predictor of whether players are above or below the gap, but after plotting we see this is not the case. An possible explanation is certain players are entering NBA from the development league instead of out of college or highschool. Such players would be older, but their salary varies drastically. If they are pulled in to replace an injured player, they might still be in the middle of a development contract, in which case the salary would be very low. However, if they have proved themselves in the development league and is now signing a new contract with NBA, they might be paid above the salary gap. So development players would be older, but could be above or below the wage gap, and this stops us from using age to identify the gap.
 
-```{r}
+```{r echo=FALSE}
 plot(data$AGE, log(data$Salary))
 ```
 
@@ -76,7 +77,7 @@ BIC(ftm, ftper)
 
 We chose to use degree of freedom of 4 with Bezier by testing different degrees of freedoms and comparing them with BIC. Let's graph salary vs. field goal made to make sure 4 is a reasonable degree of freedom.
 
-```{r}
+```{r echo=FALSE}
 y <- log(data$Salary)
 x <- data$FGM
 fit <- lm( y ~ bs(x, df=4) )
@@ -90,9 +91,10 @@ lines(xnew, ypred, col="darkgreen", lwd=2, lty=1)
 
 # Splines
 
-The variates we still have can be arranged into three groups: Offensive Stats, Defensive Stats, and Miscellaneous Stats. offensive: ( Total Points, Field Goals Made, Three Points Made, Free Throws Made, Assists, Turnovers ), defensive:( Total Rebound, Offesive Rebound, Defensive Rebound, Steals, Blocks ), miscellaneous: (Team, Age, Games Played, Win Rate, Minutes Played, PLUSMINUS, Position, Country, Draft Round).
+The variates we still have can be arranged into three groups: Offensive Stats, Defensive Stats, and Miscellaneous Stats. offensive: ( Total Points, Field Goals Made, Three Points Made, Free Throws Made, Assists, Turnovers ), defensive:( Total Rebound, Offesive Rebound, Defensive Rebound, Steals, Blocks ), miscellaneous: (Team, Age, Games Played, Win Rate, Minutes Played, Plus or Minus, Position, Country, Draft Round).
 We suspected the offensive abilities are correlated with each other, and the defensive abilities are correlated with each other. Let's explore each of these groups separately.
 
+## Offensive Stats
 We first wanted to explore the relationships between offensive stats. We started by looking at scoring stats, which  includes Field Goals Made, Three Points Made, and Free Throws Made. Since we are using the number of shots made, the total Minutes Played could be a correlating factor, so we also consider correlation with Minutes Played.
 ```{r}
 library(mgcv)
@@ -145,6 +147,8 @@ BIC(off1, off2)
 It seems the interaction doesn't actually create a better model. We will just stick to field goal made, assists, turnovers,
 and their interaction with minutes for our offensive stats. 
 
+
+## Defensive Stats
   Next we want to look at the defensive stats. We first wondered if offensive and defensive rebound can just be replaced with total number of rebound.
 Here, we fit a model against total number of rebound, and another model against offensive and defensive rebound, and a third model that include offensive-defensive interaction. 
 We should also have their interaction with minutes played.
@@ -189,6 +193,8 @@ BIC(def1, def2)
 ```
 It seems the model with only rebound and its interaction with minutes is preferred. Again, this is probably because blocks barely happen in game
 
+
+## Miscellaneous Variates
 We now want to look at the miscellaneous varaites. The discrete miscellaneous variable include Team, Position, and Country, and Draft Round. 
 The continous miscellaneous variates include Age, Games Played, Win Rate, Minutes Played, and PLUSMINUS. We are going to ignore Win Rate since that is more a team based attribute.
 
@@ -248,6 +254,7 @@ summary(misc5)
 ```
 It seems all variates are still significant.
 
+## Combined Model
 
 Our final model should include the offensive, defensive, and the miscellaneous variables we explored, with the interactions between each group that we explored.
 Offensive and defensive abilities in the NBA are generally thought not to correlate, so we will not add correlation between them. In the misc variate, we considered
@@ -610,6 +617,10 @@ We initially thought that PLUSMINUS would be a very important factor in determin
 Win Share, on the other hand, is a player statistic which is designed to estimate a player's contribution in terms of the team's wins. More information about utilizing win share in NBA can be found on https://www.basketball-reference.com/about/ws.html. We believe using Win Share instead of Plus or Minus in our model will make our model more accurate. 
 
 We did more research later into our project, and realized that players who have higher Plus or Minus are usually not the players who are the best in the NBA, but players who are on teams that have a high Win Rate (e.g. Eric Gordon, ranked 3rd in Plus or Minus, member of Huston Rockets who has the highest win rate among all NBA teams this year, ranked 90th in salary). In addition, 4 players out of the top 10 in Plus or Minus are from Huston Rockets. On the other hand, according to https://www.basketball-reference.com/leagues/NBA_2018_advanced.html, the top 10 players in Win Share are all from different teams, who are also arguably the best players in their respective teams.
+
+## Use Per Minute statistics instead of Per Game statistics
+
+Most of our data collected are stats per game. For example, PTS, REB, and AST are all per game stats. One thing we notice during our model fitting is that MIN seemed to be a major influence. However, we know that players in the NBA never have the same minutes played. Intuitively, Minutes Played as a variable would have a very strong correlation with Salary, since teams need to put better players on the court to win games, and better players usually have higher salary. One thing we could do is to divide all per game stats by MIN to get the per minute stats. This could eliminate the relationship between MIN and per game stats in our model. One problem if we pursue this method is that the fitted values might be too random, and our models might not sugguest a relationship between per minutes stats and salary. One possible reason for this to happen is because there is only so much a player can do in a minute during a basketball game.
 
 # Contribution
 All three of us worked on collecting the data, cleaning the data togther.
