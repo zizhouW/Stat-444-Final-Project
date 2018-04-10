@@ -1,0 +1,634 @@
+---
+title: "444 project code"
+author: "Zizhou Wang, MingHao Lu"
+date: "April 6, 2018"
+output: pdf_document
+---
+
+# Motivation and introduction of the problem
+
+For our project, we wondered if it is possible to predict an NBA player's salary based on his performance and his personal profile. We also wanted to know what effects player salary the most. We employed three different techniques to try and predict salary, which are smoothing splines, random forests, and boosting. For splines, we divided the explanatory variates into offensive stats, defensive stats, and miscellaneous profile. We explored the relationship and interactions within each group, and then combined the three group of variates for a final model. For each of random forests and boosting, we used cross validation to find the most appropriate complexity, and fitted a final model on those complexities. Finally, we compared the cross validation score of all three models to pick the best model. We also have a baseline model which we compared our final model against( we will talk more about how we constructed this baseline model and why it is an appriopriate baseline model).
+
+Solving this problem is useful for two reasons. If players understand what affects their salary the most, they can work on those areas in the future and develope their value.
+Teams can also use the prediction to evaluate if they are overpaying or underpaying a player, which helps them plan their budget.
+
+
+
+
+
+# Data and Preprocessing
+
+We initially started looking at the data of NBA players at https://www.basketball-reference.com/contracts/players.html (updated constantly), which had 582 records of player salaries for year 2017-2018 at the time. We had to remove some duplicated records for players with different salaries on different teams. This is because some players could get cut by teams half way through the season, and sometimes they would get picked up by another team, which resulted in having multiple player contracts in a year. An example for this is Rajon Rondo, who was waived by the Chicago Bulls, signed a contract with New Orleans Pelicans right after.
+
+During the process of matching players’ stats/profile with their salaries, we encountered some player are missing a profile. An example is Walt Lemon, Jr., who is listed in our salary data, but we couldn't find all the profile information needed. We were not able to find his player information on https://stats.nba.com/players/bio/, which contains data that we thought could be important in our analysis. Therefore, we removed these records.
+
+For the “Position” categorical variable in our dataset, we stated in our proposal that we would be using 5 values, PG (Point Guard), SG (Shooting Guard), SF (Small Forward), PF (Power Forward), and C (Center). It turns out that many guards in the NBA today are “combo guards”, which means they can both play at the Point Guard and Shooting Guard position (e.g. James Harden). There are also many forwards in the NBA who can both play at the Small Forward and Power Forward position (e.g. Lebron James). We reduced the number of values to 3, grouping PG and SG as G (Guard), SF and PF as F (Forward). In addition, there are some players who are “swingman”, meaning they can both play at the SG and SF position (e.g. Jimmy Butler). Since this is not a frequent case, we chose a position for each of them based on which position they had mostly been playing at this season (2017-2018) and our understanding of their strength. Because of such swing players, we went through all the data by hand and assigned the most apprioriate role to our knowlege.
+
+Our final data set contains 515 records and does not contain any N/A’s.
+
+We then realized a couple outliers in our dataset. For example, Gordon Hayward was horribly injured during his very first game at the beginning of the year. He was not able to return for the rest of the season. With the 4th highest salary on our list, he would be an extreme outlier in our models with minimal statistical contribution. However, this does not mean that he is not worth the salary, since he was only able to play for about 5 minutes before the injury. However, there are only a few exceptions we think the techniques we use should be robust enough
+to handle them.
+
+
+```{r}
+data <- read.csv("./combined.csv", header=TRUE)
+head(data, n=3)
+```
+
+We first wanted to explore the distribution of Salary, since that is our preditive variable and arguably the most important variable.
+By graphing the variable, we realized it is heavily skewed, and we tried to fix this by applying a power transformation. After trying multiple different
+$\alpha$, we determined $\alpha=0$ ( i.e. log transformation ) gave the best result.
+
+```{r}
+par(mfrow=c(1,2))
+hist(data$Salary)
+hist(log(data$Salary))
+```
+  
+  However, after the log transformation, the distribution of salary becomes bimodal. Intuitively, this is because there is a clear seperation of 
+salary between players just entering NBA on their first contract, and players on their subsequent contracts  This salary gap is expected because NBA 
+is known to have a mostly standard salary for new players. We thought age might be a predictor of whether players are above or below the gap, but after 
+plotting we see this is not the case. An possible explanation is certain players are entering NBA from the development league instead of out of college 
+or highschool. Such players would be older, but their salary varies drastically. If they are pulled in to replace an injured player, they might still be
+in the middle of a development contract, in which case the salary would be very low. However, if they have proved themselves in the development league and
+is now signing a new contract with NBA, they might be paid above the salary gap. So development players would be older, but could be above or below the wage gap,
+and this stops us from using age to identify the gap.
+
+```{r}
+plot(data$AGE, log(data$Salary))
+```
+
+There are couple groups of variables in our data that we know are each internally correlated. For \textbf{each} of the three ways to score 
+- field goals, three points, and free throws - there are three corresponding variates - number of attempted shots, number of made shots, and success percentage(number made/number attempted). For each of the ways to score, we only want to use one variate. Intuitively, the number of 
+attempt tells us the least about a player's offensive abilities, so we will only compare between number of made shots and success percentage. 
+For each way to score, we fit a spline model for salary against shots made, and another spline model for salary against success percentage, 
+and pick the variate corresponding to the model with lower BIC score.
+
+  It turns out number of shots made is always the preferred, and always has quite lower BIC score. This could be because some players take very few shots, so the variance in success percentage for these players is quite high and does not accurately reflect their skill level.
+
+```{r}
+library(splines)
+fgm <- lm(log(Salary) ~ bs(FGM, degree=4), data=data )
+fgper <- lm(log(Salary) ~ bs(FGPER, degree=4), data=data )
+BIC(fgm, fgper)
+
+tpm <- lm(log(Salary) ~ bs(TPM, degree=4), data=data )
+tpper <- lm(log(Salary) ~ bs(TPPER, degree=4), data=data )
+BIC(tpm, tpper)
+
+ftm <- lm(log(Salary) ~ bs(FTM, degree=4), data=data )
+ftper <- lm(log(Salary) ~ bs(FTPER, degree=4), data=data )
+BIC(ftm, ftper)
+```
+
+We chose to use degree of freedom of 4 with Bezier by testing different degrees of freedoms and comparing them with BIC. Let's graph salary
+vs field goal made to make sure 4 is a reasonable degree of freedom.
+
+```{r}
+y <- log(data$Salary)
+x <- data$FGM
+fit <- lm( y ~ bs(x, df=4) )
+xnew <- seq(min(x), max(x), length.out=515)
+ypred <- predict(fit,newdata=data.frame(x=xnew))
+plot(x, y, xlab="Field Goal Made", ylab="Log Salary",
+  col="grey80", pch=19, cex=0.5,
+  main = "Bezier Spline( df=4 )")
+lines(xnew, ypred, col="darkgreen", lwd=2, lty=1)
+```
+
+# Splines
+
+The variates we still have can be arranged into three groups: Offensive Stats, Defensive Stats, and Miscellaneous Stats.
+offensive: ( Total Points, Field Goals Made, Three Points Made, Free Throws Made, Assists, Turnovers ), defensive:( 
+Total Rebound, Offesive Rebound, Defensive Rebound, Steals, Blocks ), miscellaneous: (Team, Age, Games Played, Win Rate, Minutes Played, PLUSMINUS, Position, Country, Draft Round).
+We suspected the offensive abilities are correlated with each other, and the defensive abilities are correlated with each other. Let's explore each of these groups
+separately.
+
+We first wanted to explore the relationships between offensive stats. We started by looking at scoring stats, which 
+includes Field Goals Made, Three Points Made, and Free Throws Made. Since we are using the number of shots made, 
+the total Minutes Played could be a correlating factor, so we also consider correlation with Minutes Played.
+```{r}
+library(mgcv)
+off1 <- gam( log(Salary)~s(FGM) + s(TPM) + s(FTM) 
+             + ti(FGM,MIN) + ti(TPM, MIN) + ti(FTM,MIN), data=data )
+summary(off1)
+```
+Field Goal and Field Goal with minutes are the only significant variates, which makes sense because majority of points in every game are field goals.
+We also want to know if a model with total points would be better
+
+```{r}
+off2 <- gam( log(Salary)~s(FGM) + ti(FGM, MIN), data=data)
+off3 <- gam( log(Salary)~s(PTS) + ti(PTS, MIN), data=data)
+BIC(off2, off3)
+```
+It seems using field goal made is better than using total points made. Let's look at the summary of the model with field goals.
+
+```{r}
+summary(off2)
+```
+It would appear we should keep both field goals made, and the interaction between field goals and minutes played,
+(although field goals is much more significant than the interaction)
+
+  The other offensive stats include assits and turnover. We are considering turnover as part of offensive stats because
+it indicates a lack of ability to score. We are now looking at Points, Assits, and Turnovers, and fit different models to
+explore their relationships. Again, we should take minutes played into consideration. 
+
+```{r}
+off1 <- gam( log(Salary)~s(FGM) + s(AST) + s(TOV) 
+             + ti(FGM,MIN) + ti(AST,MIN) + ti(TOV,MIN), data=data)
+summary(off1)
+```
+
+It seems that at $\alpha=0.05$, field goal, assists, turnovers and their interactions with minutes played are all significant.
+Let's also explore if we should add the pair-wise interaction between field goal, assists, and turnovers.
+```{r}
+off <- gam( log(Salary)~ s(FGM) + s(AST) + s(TOV) 
+            + ti(FGM, MIN) + ti(AST, MIN) + ti(TOV, MIN)
+            + ti(FGM, AST) + ti(FGM, TOV) + ti(AST, TOV)
+            + ti(FGM, AST, MIN) + ti(FGM, TOV, MIN) + ti(AST, TOV, MIN), data=data)
+summary(off)
+```
+It seems the only additional interaction we might care about is between field goal made and turnovers.
+Field goals made and turnovers might have correlation because they might both be positively correlated with amount of ball
+possesion the player has. Let's compare a model with the interaction between field goal and turnovers, and a model
+without the interaction.
+
+```{r}
+off1 <- gam( log(Salary)~ s(FGM) + s(AST) + s(TOV) 
+             + ti(FGM, MIN) + ti(AST, MIN) + ti(TOV, MIN), data=data )
+off2 <- gam( log(Salary)~ s(FGM) + s(AST) + s(TOV) 
+             + ti(FGM, MIN) + ti(AST, MIN) + ti(TOV, MIN) + ti(FGM, TOV), data=data )
+BIC(off1, off2)
+```
+It seems the interaction doesn't actually create a better model. We will just stick to field goal made, assists, turnovers,
+and their interaction with minutes for our offensive stats. 
+
+  Next we want to look at the defensive stats. We first wondered if offensive and defensive rebound can just be replaced with total number of rebound.
+Here, we fit a model against total number of rebound, and another model against offensive and defensive rebound, and a third model that include offensive-defensive interaction. 
+We should also have their interaction with minutes played.
+```{r}
+reb1 <- gam( log(Salary) ~ s(REB), data=data )
+reb2 <- gam( log(Salary) ~ s(REB) + ti(REB, MIN), data=data )
+
+reb3 <- gam( log(Salary) ~ s(OREB) + s(DREB), data=data )
+reb4 <- gam( log(Salary) ~ s(OREB) + s(DREB) + ti(OREB, MIN) + ti(DREB, MIN), data=data )
+
+reb5 <- gam( log(Salary) ~ s(OREB) + s(DREB) + ti(OREB, DREB), data=data )
+reb6 <- gam( log(Salary) ~ s(OREB) + s(DREB) + ti(OREB, DREB) 
+             + ti(OREB, MIN) + ti(DREB, MIN) + ti(OREB, DREB, MIN), data=data )
+
+BIC(reb1, reb2, reb3, reb4, reb5, reb6)
+```
+It seems the model with only the total number of rebound, and its interaction with minutes played is preferred Let's look at the summary for this model.
+```{r}
+summary(reb2)
+```
+It seems we should keep both the total nubmer of rebound, and its interaction with minutes.
+
+We now want to explore the relationship between the remaining defensive stats: Total Rebound, Steals, and Blocks.
+Let's first look at a model fitted without any pairwise interaction between the three, but with their individual interaction with
+minutes played.
+```{r}
+def <- gam( log(Salary)~s(REB)+s(STL)+s(BLK)+ti(REB, MIN)+ti(STL,MIN)+ti(BLK,MIN), data=data)
+summary(def)
+```
+It seems at $\alpha=0.05$, only rebound and rebound's interaction with minutes matter. This might be because blocks and steals barely happens in games,
+and has little variation.
+```{r}
+range(data$STL)
+range(data$BLK)
+```
+On average, even the best defensive players get less than 3 steals and rebound per game. This is just not a lot of 
+variation in these two stats.
+
+Intuitively, rebound and blocks should both be correlated with height and jumping power. Let's see if their correlation should be included.
+```{r}
+def1 <- gam( log(Salary)~s(REB)+ti(REB,MIN), data=data)
+def2 <- gam( log(Salary)~s(REB)+ti(REB,MIN)+ti(REB,BLK)+ti(REB,BLK,MIN), data=data)
+BIC(def1, def2)
+```
+It seems the model with only rebound and its interaction with minutes is preferred. Again, this is probably because blocks barely happen in game
+
+We now want to look at the miscellaneous varaites. The discrete miscellaneous variable include Team, Position, and Country, and Draft Round. 
+The continous miscellaneous variates include Age, Games Played, Win Rate, Minutes Played, and PLUSMINUS. We are going to ignore Win Rate
+since that is more a team based attribute.
+
+Minutes played should be correlated with games played. Let's see if we need both of them.
+
+```{r}
+misc1 <- gam( log(Salary) ~ s(MIN), data=data )
+misc2 <- gam( log(Salary) ~ s(MIN) + s(GP), data=data)
+misc3 <- gam( log(Salary) ~ s(MIN) + s(GP) + ti(MIN, GP), data=data)
+BIC(misc1, misc2, misc3)
+```
+Interestingly, it does seem that we should have both minutes played and games played, but not their interaction. Let's see the summary of the model with both variates.
+```{r}
+summary(misc2)
+```
+It seems both of these variables are very significant.
+
+Let's fit a model with all the continuous variates. 
+```{r}
+misc <- gam( log(Salary) ~  s(AGE) + s(GP) + s(MIN) + s(PLUSMINUS), data=data )
+summary(misc)
+```
+
+Plus Minus is not important, which makes sense since this score depends highly on the player's team's performance
+and the other team's performance. Plus minus is commonly considered not an accurate reflection of a player's performance. 
+Let's explore the interaction between remaining variates.
+```{r}
+misc1 <- gam( log(Salary) ~ s(AGE) + s(GP) + s(MIN) , data=data )
+misc2 <- gam( log(Salary) ~ s(AGE) + s(GP) + s(MIN) + ti(AGE, GP), data=data )
+misc3 <- gam( log(Salary) ~ s(AGE) + s(GP) + s(MIN) + ti(AGE, MIN), data=data )
+misc4 <- gam( log(Salary) ~ s(AGE) + s(GP) + s(MIN) + ti(GP, MIN), data=data )
+BIC(misc1, misc2, misc3, misc4)
+```
+
+It seems the model with interaction between Age and Games Played is the best. Let's look at the summary for this model
+
+```{r}
+summary(misc2)
+```
+All variates appear to be significant.
+
+We also want to use the categorical variates. Unfortunately, we don't have enough data to treat all their interaction as levels. 
+We will try each one of them as levels individually, and see which is the best. 
+
+
+```{r}
+misc1 <- gam( log(Salary) ~  s(AGE) + s(GP)  + s(MIN) + ti(AGE, GP), data=data )
+misc2 <- gam( log(Salary) ~  Country + s(AGE) + s(GP) + s(MIN) + ti(AGE, GP), data=data )
+misc3 <- gam( log(Salary) ~  Position + s(AGE) + s(GP) + s(MIN) + ti(AGE, GP), data=data )
+misc4 <- gam( log(Salary) ~  Team + s(AGE) + s(GP) + s(MIN) + ti(AGE, GP), data=data )
+misc5 <- gam( log(Salary) ~  Draft.Round + s(AGE) + s(GP) + s(MIN) + ti(AGE, GP), data=data )
+BIC(misc1, misc2, misc3, misc4, misc5)
+```
+
+Draft Round seems to be the only variate that improved upon the model with only continous variates. Let's look at the summary
+of the model with Draft Round as levels.
+```{r}
+summary(misc5)
+```
+It seems all variates are still significant.
+
+
+Our final model should include the offensive, defensive, and the miscellaneous variables we explored, with the interactions between each group that we explored.
+Offensive and defensive abilities in the NBA are generally thought not to correlate, so we will not add correlation between them. In the misc variate, we considered
+the interaction between MIN and offensive and defensive variates. We also suspect Position to correlate with offensive and defensive stats, so we will also include a 
+model with position interacting with the offensive and defensive stats using the \textbf{by=} keyword.
+
+```{r}
+fit1 <- gam( log(Salary) ~ Draft.Round + s(AGE) + s(GP)+ s(MIN) + ti(AGE, GP)
+            + s(FGM) + s(AST) + s(TOV) + ti(FGM,MIN) + ti(AST,MIN) + ti(TOV,MIN)
+            + s(REB)+ti(REB,MIN), data=data )
+
+fit2 <- gam( log(Salary) ~ Draft.Round + s(AGE) + s(GP)+ s(MIN) + ti(AGE, GP)
+            + s(FGM, by=Position) + s(AST, by=Position) + s(TOV, by=Position) + ti(FGM,MIN, by=Position) + ti(AST,MIN, by=Position) + ti(TOV,MIN, by=Position)
+            + s(REB, by=Position)+ti(REB,MIN, by=Position), data=data )
+
+BIC(fit1, fit2)
+```
+
+It seems we should keep the interaction with position doesn't help. Let's look at the summary of the model with just Draft Round as levels.
+```{r}
+summary(fit1)
+```
+
+Removing the stats with p-value less than 0.05, we fit our final model
+```{r}
+fit3 <- gam( log(Salary) ~ Draft.Round + s(AGE) + s(GP)+ s(MIN) + ti(AGE, GP)
+            + s(FGM) + s(AST) + s(TOV) + ti(AST,MIN) + ti(TOV,MIN)
+            + s(REB), data=data )
+summary(fit3)
+```
+
+Finally let's look at the 5-fold cross validation score.
+```{r}
+library(gamclass)
+CVgam( log(Salary) ~ Draft.Round + s(AGE) + s(GP)+ s(MIN) + te(AGE, GP)
+            + s(FGM) + s(AST) + s(TOV) + te(AST,MIN) + te(TOV,MIN)
+            + s(REB), data=data, nfold=5 )
+```
+
+The apse is 0.9607.
+\newpage
+
+# Random Forest
+
+We would like to utilize random forest to determine the importance of explanatory variates.
+```{r echo=FALSE}
+## Random Forest
+library(randomForest)
+get.explanatory_varnames <- function(formula){
+  f <- as.formula(formula)
+  terms <- terms(f)
+  attr(terms, "term.labels")
+}
+set.seed(54321)
+N <- nrow(data)
+N_train <- round(2* N /3)
+N_test <- N - N_train
+id.train <- sample(1:N, N_train, replace=FALSE)
+id.test <- setdiff(1:N, id.train)
+
+##set.seed(1)
+data.rf <- randomForest(log(Salary) ~
+                          PTS + REB + AST + TOV + STL + BLK + Team + WR + AGE + FGM + 
+                          FGPER + TPM + TPPER + FTM + FTPER + PF + PLUSMINUS + Position + Country + MIN + 
+                          Draft.Round,
+                        data = data,
+                        importance = TRUE,subset = id.train,
+                        mtry = 3)
+importance(data.rf, type=2) #the drop in RSS
+importance(data.rf, type=1) #average decrease in the accuracy of predictions
+varImpPlot(data.rf)
+trainy <- log(data[,"Salary"])
+trainx <- data[, get.explanatory_varnames(data.rf)]
+# Five fold cross-validataion
+data.rfcv <- rfcv(trainx = trainx, trainy = trainy, cv.fold = 5)
+# We can plot the results
+with(data.rfcv, plot(n.var, error.cv, pch = 19, type="b", col="blue")) 
+```
+We used PTS, REB, AST, TOV, STL, BLK, Team, WR, AGE, FGM, FGPER, TPM, TPPER, FTM, FTPER, PF, PLUSMINUS, Position, Country, MIN, and Draft.Round against log(Salary) for the random forest. We did not choose to include Draft.Number because it is a categorical variate with 60 different potential values, but random forest does not accept categorical predictors with more than 53 categories.
+
+The result suggests that the error of cross validation is the lowest for 10 explanatory variates, at about 1.18. We then choose the top 10 most important variates based on RSS, Team, MIN, FGM, Draft.Round, TOV, PF, PTS, AGE, REB, and FGPER, and run the process again.
+
+```{r echo=FALSE}
+set.seed(54321)
+data.rfcv.10 <- randomForest(log(Salary) ~
+                       Team + MIN + FGM + Draft.Round + TOV + PF + PTS + AGE + REB + FGPER,
+                      data = data,
+                      importance = TRUE)
+trainx <- data[, get.explanatory_varnames(data.rfcv.10)]
+# Five fold cross-validataion
+data.rfcv <- rfcv(trainx = trainx, trainy = trainy, cv.fold = 5)
+# We can plot the results
+with(data.rfcv, plot(n.var, error.cv, pch = 19, type="b", col="blue"))
+```
+The result from the second run suggests that the error of cross validation is the lowest when there are 5 explanatory variates, at around 1.22. We then choose the top 5 most important variates againbased on RSS, which are Team, MIN, FGM, PTS, and AGE, and run the process again.
+
+```{r echo=FALSE}
+set.seed(54321)
+data.rfcv.5 <- randomForest(log(Salary) ~
+                       Team + MIN + FGM + Draft.Round + TOV,
+                      data = data,
+                      importance = TRUE)
+trainx <- data[, get.explanatory_varnames(data.rfcv.5)]
+data.rfcv <- rfcv(trainx = trainx, trainy = trainy, cv.fold = 5)
+with(data.rfcv, plot(n.var, error.cv, pch = 19, type="b", col="blue"))
+```
+The result from the third run suggests that the error of cross validation is the lowest when there are 5 explanatory variates, at around 1.64. We can say that the Team, MIN, FGM, PTS, and AGE are important variates based on cross validation. Also, AGE seems to be the most important for predictive purposes.
+
+## Player self-evaluate and improvements
+For NBA players who would like to self-evaluate and who are trying to see what they can work on to receive a better contract, we can consider how Salary depends on just those explanatory variates that were under the control of the NBA player. Therefore, we removed Team, MIN, WR, AGE, Draft.Round, and PLUSMINUS. Age is obviously an uncontrollable variate. We think players rarely have control for Team, MIN, and Draft.Round since it does not depend on players' previous NBA performance, instead, these would depend on the decisions from coach and the organization Also, WR and PLUSMINUS have a lot to do with the teammates of the NBA player we are trying to analyze, so we decided to take these out of consideration as well. This move left us with 15 explanatory variates.
+```{r echo=FALSE}
+set.seed(54321)
+data.rf2 <- randomForest(log(Salary) ~
+                           PTS + REB + AST + TOV + STL + BLK + FGM + FGPER + TPM + 
+                           TPPER + FTM + FTPER + PF + Position + Country,
+                         data = data,
+                         importance = TRUE,subset = id.train,
+                         mtry = 3)
+importance(data.rf2, type=2) #the drop in RSS
+importance(data.rf2, type=1) #average decrease in the accuracy of predictions
+varImpPlot(data.rf2)
+trainy2 <- log(data[,"Salary"])
+trainx2 <- data[, get.explanatory_varnames(data.rf2)]
+data.rfcv2 <- rfcv(trainx = trainx2, trainy = trainy2, cv.fold = 5)
+with(data.rfcv2, plot(n.var, error.cv, pch = 19, type="b", col="blue")) 
+```
+The cross validation suggests that all 15 explanatory variates are important, at an error of around 1.58. The result also suggests that FGM, TOV, REB, and PTS are the most important.
+
+\newpage
+
+# Boosting
+
+We then used the Gradient Boosting method to determine the importance of explanatory variates, and see if it shows a different result compared to Random Forest.
+
+```{r echo=FALSE}
+library(gbm)
+formula = "log(Salary)~ Team + AGE + PTS + MIN+REB + AST + TOV + STL +
+            BLK + FGM + FGPER + TPM + TPPER + FTM + FTPER + PF + 
+            Position + Country + PLUSMINUS + Draft.Round + WR"
+explain_data = data[,c("Salary","PTS", "Team", "AGE","MIN", "PLUSMINUS", 
+                       "Draft.Round", "REB", "AST", "TOV", "STL", "BLK", 
+                       "FGM", "FGPER", "TPM", "TPPER", "FTM", "FTPER", 
+                       "PF", "Position", "Country", "WR")]
+
+set.seed(54321)
+M = 2500;
+k=5
+##boostFit$cv.error[M]
+boostFit <-nba.boost.shrink <-gbm(as.formula(formula),
+                                data=explain_data,
+                                distribution ="gaussian",
+                                shrinkage = 0.05,
+                                n.trees =M,
+                                bag.fraction =1,
+                                cv.folds =k,
+                                n.minobsinnode= 3)
+
+
+summary(boostFit, main="Effect of each attribute")
+```
+We used PTS, REB, AST, TOV, STL, BLK, Team, WR, AGE, FGM, FGPER, TPM, TPPER, FTM, FTPER, PF, PLUSMINUS, Position, Country, MIN, and Draft.Round against log(Salary), which is the same as what we used for Random Forest.
+
+The result shows that Draft Round, Minutes played, and Age are the 3 major variates, with much higher influece over others.
+
+```{r echo=FALSE}
+formula = "log(Salary)~ Team + AGE + PTS + MIN+REB + AST + TOV + STL + 
+          BLK + FGM + FGPER + TPM + TPPER + FTM + FTPER + PF + Position + 
+          Country + PLUSMINUS + Draft.Round + WR"
+explain_data = data[,c("Salary","PTS", "Team", "AGE","MIN", "PLUSMINUS", 
+                      "Draft.Round", "REB", "AST", "TOV", "STL", "BLK", "FGM",
+                      "FGPER", "TPM", "TPPER", "FTM", "FTPER", "PF", 
+                      "Position", "Country", "WR")]
+
+alphas <-c(0.005,0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08,
+           0.09,0.10,0.20,0.30,0.40,0.50,0.60,0.70,0.80,0.90,1)
+n_alphas <-length(alphas)
+cverror <-numeric(length =n_alphas)
+Mvals <-numeric(length =n_alphas)
+fit <-list(length =n_alphas)
+for (i in 1:n_alphas) {
+  set.seed(54321)
+  fit[[i]] <- nba.boost.shrink <-gbm(as.formula(formula),
+                                data=explain_data,
+                                distribution ="gaussian",
+                                shrinkage =alphas[i],
+                                n.trees =M,
+                                bag.fraction =1,
+                                cv.folds =k,
+                                n.minobsinnode= 3)
+  cverror[i] <-min(fit[[i]]$cv.error)
+  
+  Mvals[i] <-which.min(fit[[i]]$cv.error)
+  }
+plot(alphas, cverror,type ="b",
+     col =adjustcolor("firebrick",0.7),
+     pch=19,lwd=2,main ="cross-validated error",
+     xlab ="shrinkage",ylab="cv.error")
+```
+We see that the best learning rate for these 21 explainatory variates is at around 0.06, with cv error around 1.15.
+
+```{r echo=FALSE}
+alpha <- 0.06
+k <- 5
+# Shrinkage parameter values
+Ms <- c(50, 100, 150, 200, 250, 300, 400, 500)
+n_Ms <- length(Ms)
+cverror <- numeric(length = n_Ms)
+Mvals <- numeric(length = n_Ms)
+fit <- list(length = n_Ms)
+for (i in 1:n_Ms) {
+  set.seed(54321)
+  fit[[i]] <- nba.boost.shrink <- gbm(as.formula(formula),
+                                  data=explain_data,
+                                  distribution = "gaussian",
+                                  shrinkage = alpha,
+                                  n.trees = Ms[i],
+                                  bag.fraction = 1,
+                                  cv.folds = k
+  )
+  cverror[i] <- min(fit[[i]]$cv.error)
+}
+plot(Ms, cverror, type = "b",
+     col = adjustcolor("firebrick", 0.7), pch=19, lwd=2,
+     main = "cross-validated error", 
+     xlab = "Number of trees", ylab="cv.error")
+```
+We see that the best value for M for more explainatory variables is at about 150, with cv error around 1.16. We can see that the return is very small when M is bigger than 150.
+
+## Player self-evaluate and improvements
+
+We want to do the same thing in boosting for what we did in random tree, allowing players to see what they need to improve on the most to get a higher salary. Again, we removed Team, MIN, WR, AGE, Draft.Round, and PLUSMINUS, and repeated the process.
+
+```{r echo=FALSE}
+formula = "log(Salary)~ PTS + REB + AST + TOV + STL + BLK + FGM + FGPER + TPM + 
+                           TPPER + FTM + FTPER + PF + Position + Country"
+explain_data = data[,c("Salary","PTS", "REB", "AST", "TOV", "STL", "BLK", "FGM",
+                       "FGPER", "TPM", "TPPER", "FTM", "FTPER", "PF", "Position", "Country")]
+
+set.seed(54321)
+M = 2500;
+k=5
+##boostFit$cv.error[M]
+boostFit <-nba.boost.shrink <-gbm(as.formula(formula),
+                                data=explain_data,
+                                distribution ="gaussian",
+                                shrinkage = 0.05,
+                                n.trees =M,
+                                bag.fraction =1,
+                                cv.folds =k,
+                                n.minobsinnode= 3)
+
+
+summary(boostFit, main="Effect of each attribute")
+```
+The result shows that PTS is the most important variable here, REB is the second most important, with TOV, FGM, FTPER, PF, and FGPER at 3rd to 7th, which are very close with each other.
+
+```{r echo=FALSE}
+alphas <-c(0.005,0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08,
+           0.09,0.10,0.20,0.30,0.40,0.50,0.60,0.70,0.80,0.90,1)
+n_alphas <-length(alphas)
+cverror <-numeric(length =n_alphas)
+Mvals <-numeric(length =n_alphas)
+fit <-list(length =n_alphas)
+for (i in 1:n_alphas) {
+  set.seed(54321)
+  fit[[i]] <- nba.boost.shrink <-gbm(as.formula(formula),
+                                data=explain_data,
+                                distribution ="gaussian",
+                                shrinkage =alphas[i],
+                                n.trees =M,
+                                bag.fraction =1,
+                                cv.folds =k,
+                                n.minobsinnode= 3)
+  cverror[i] <-min(fit[[i]]$cv.error)
+  
+  Mvals[i] <-which.min(fit[[i]]$cv.error)
+  }
+plot(alphas, cverror,type ="b",
+     col =adjustcolor("firebrick",0.7),
+     pch=19,lwd=2,main ="cross-validated error",
+     xlab ="shrinkage",ylab="cv.error")
+```
+We see that the best learning rate for these 15 explainatory variates is also at around 0.06, with cv error around 1.66.
+
+```{r echo=FALSE}
+alpha <- 0.06
+k <- 5
+# Shrinkage parameter values
+Ms <- c(50, 100, 150, 200, 250, 300, 400, 500)
+n_Ms <- length(Ms)
+cverror <- numeric(length = n_Ms)
+Mvals <- numeric(length = n_Ms)
+fit <- list(length = n_Ms)
+for (i in 1:n_Ms) {
+  set.seed(54321)
+  fit[[i]] <- nba.boost.shrink <- gbm(as.formula(formula),
+                                  data=explain_data,
+                                  distribution = "gaussian",
+                                  shrinkage = alpha,
+                                  n.trees = Ms[i],
+                                  bag.fraction = 1,
+                                  cv.folds = k
+  )
+  cverror[i] <- min(fit[[i]]$cv.error)
+}
+plot(Ms, cverror, type = "b", 
+     col = adjustcolor("firebrick", 0.7), pch=19, lwd=2,
+     main = "cross-validated error", xlab = "Number of trees", ylab="cv.error")
+```
+
+
+We see that the best value for M for more explainatory variables is also at about 200, with cv error around 1.66. We can see that the return is very small when M is bigger than 200.
+
+
+
+
+# Statistical Conclusion
+
+A popular way to determine the efficiency of an NBA player is to look at his EFF, calculated by EFF = PTS + REB + AST + STL + BLK - FGM - FTM - TOV, where all variates are averaged per game. The EFF takes Steal (STL), Block (BLK), Field Goal Missed (FGM), Free Throw Missed (FTM), and Turn Over (TOV) into account, which adds the defensive ability (STL and BLK) and inefficiency (FGM, FTM, TO) into the equation. This formula is the most popular metric for evaluating players in NBA, and a good baseline is to use EFF as the sole explanatory variate
+to predict salary.
+
+```{r echo=FALSE}
+
+y <- log(data$Salary)
+x <- data$PTS + data$REB + data$AST + data$STL + data$BLK - data$TOV - data$FGM - data$FTM
+
+fit <- gam( y ~ bs(x, df=4) )
+xnew <- seq(min(x), max(x), length.out=515)
+ypred <- predict(fit,newdata=data.frame(x=xnew))
+plot(x, y, xlab="Field Goal Made", ylab="Log Salary",
+  col="grey80", pch=19, cex=0.5,
+  main = "Bezier Spline( df=4 )")
+lines(xnew, ypred, col="darkgreen", lwd=2, lty=1)
+
+suppressWarnings(CVgam( y ~ bs(x, df=4), data=data, nfold=5 ))
+
+```
+
+The cross validation apse of this model is 3.5582, which is significantly higher than the cross validation value of all three of our models.
+This can not be used to evaluate the goodness of our models, since EFF was not developed to predict salary, but should serve as a reasonable
+sanity test that our fitted models are somewhat reasonable.
+
+The smoothing method we created has the lowest apse of 0.96. This model is also the fastst to fit of the three method we attempted.
+We concluded this is the model that should be used for future salary prediction.
+
+As mentioned before, some of the more powerful explantory variates such as age are out of the control of the player. Of the stats players can 
+effect, the most important stats are Points( especially Field Goals ), Rebound, and Turnovers.
+
+# Conclusion
+
+We have created a good model for predicting player salary, that teams can use to evaluate if they are overpaying or underpaying a player, and help
+plan future budget efficiently.
+
+For players who want to improve their salary, they should first realize there are certain factor that strongly influence their 
+salary but are outside of their control ( such as Age ). Of the factor they will be able to influence, they should focus on improving their field goal
+scoring abilities, rebounding abilities, and avoid turnovers.
+
+# Contribution
+All three of us worked on collecting the data, cleaning the data togther.
+MingHao Lu: Motivation and Introduction, Data, Preprocessing, Smoothing Methods, Statistical Conclusion, Conclusion in Context
+Zizhou Wang: Motivation and Introduction, Data, Preprocessing, Random Forest, Future Work
