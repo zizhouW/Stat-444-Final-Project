@@ -7,24 +7,25 @@ output: pdf_document
 
 ```{r}
 data <- read.csv("combined.csv", header=TRUE)
+data$WR = data$W/data$GP
 ##install.packages("gbm")
 ```
 Preparation
 
 ```{r}
 library(gbm)
-formula = "log(Salary)~ Team + AGE + GP + PTS + MIN+REB + AST + TOV + STL + BLK + FGM + FGPER + TPM + 
-                           TPPER + FTM + FTPER + PF + Position +FP+ Country + PLUSMINUS + Draft.Number"
-explain_data = data[,c("Salary","PTS", "Team", "AGE","MIN", "GP",  "PLUSMINUS", "Draft.Number", "REB", "AST", "TOV", "STL", "BLK", "FGM", "FGPER", "TPM", "TPPER", "FTM", "FTPER", "PF", "Position", "Country", "FP")]
+formula = "log(Salary)~ Team + AGE + PTS + MIN+REB + AST + TOV + STL + BLK + FGM + FGPER + TPM + 
+                           TPPER + FTM + FTPER + PF + Position + Country + PLUSMINUS + Draft.Number + WR"
+explain_data = data[,c("Salary","PTS", "Team", "AGE","MIN", "PLUSMINUS", "Draft.Number", "REB", "AST", "TOV", "STL", "BLK", "FGM", "FGPER", "TPM", "TPPER", "FTM", "FTPER", "PF", "Position", "Country", "WR")]
 
-set.seed(20180409)
+set.seed(54321)
 M = 2500;
 k=5
 ##boostFit$cv.error[M]
-boostFit <-fb.boost.shrink <-gbm(as.formula(formula),
+boostFit <-nba.boost.shrink <-gbm(as.formula(formula),
                                 data=explain_data,
                                 distribution ="gaussian",
-                                shrinkage =0.05,
+                                shrinkage = 0.05,
                                 n.trees =M,
                                 bag.fraction =1,
                                 cv.folds =k,
@@ -33,35 +34,7 @@ boostFit <-fb.boost.shrink <-gbm(as.formula(formula),
 
 summary(boostFit, main="Effect of each attribute")
 ```
-Games Played, Draft Number, Age and Minutes played are the four major ones. Since Games player and Minutes played are expected to see some correlation, we only take games played into account in our next part. Individual personal statistics such as blcok and assistant are less relavant in this case.
-
-```{r}
-library("gbm")
-formula = "log(Salary)~ GP + Draft.Number + AGE"
-explain_data = data[,c("Salary","Draft.Number", "GP", "AGE")]
-alphas <-c(0.005,0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08,0.09,0.10,0.20,0.30,0.40,0.50,0.60,0.70,0.80,0.90,1)
-n_alphas <-length(alphas)
-cverror <-numeric(length =n_alphas)
-Mvals <-numeric(length =n_alphas)
-fit <-list(length =n_alphas)
-for (i in 1:n_alphas) {
-  set.seed(20180409)
-  fit[[i]] <-fb.boost.shrink <-gbm(as.formula(formula),
-                                data=explain_data,
-                                distribution ="gaussian",
-                                shrinkage =alphas[i],
-                                n.trees =M,
-                                bag.fraction =1,
-                                cv.folds =k,
-                                n.minobsinnode= 3)
-  cverror[i] <-min(fit[[i]]$cv.error)
-  
-  Mvals[i] <-which.min(fit[[i]]$cv.error)
-  }
-plot(alphas, cverror,type ="b",col =adjustcolor("firebrick",0.7),pch=19,lwd=2,main ="cross-validated error",xlab ="shrinkage",ylab="cv.error")
-          
-```
-Best learning rate around 0.4, with cv error around 1.38
+Draft Number, Minutes played and Age are the four major ones. Since Games player and Minutes played are expected to see some correlation, we only take games played into account in our next part. Individual personal statistics such as blcok and assistant are less relavant in this case.
 
 
 ```{r}
@@ -70,9 +43,9 @@ Best learning rate around 0.4, with cv error around 1.38
 
 
 library("gbm")
-formula = "log(Salary)~ GP+Draft.Number+AGE+MIN+FP+Country+FTPER+FGM+Team+TOV+FGPER+PLUSMINUS+REB+Position"
-explain_data = data[,c("Salary","GP","Draft.Number","AGE","MIN","FP","Country",
-                       "FTPER","FGM","Team","TOV","FGPER","PLUSMINUS","REB","Position")]
+formula = "log(Salary)~ Team + AGE + PTS + MIN+REB + AST + TOV + STL + BLK + FGM + FGPER + TPM + 
+                           TPPER + FTM + FTPER + PF + Position + Country + PLUSMINUS + Draft.Number + WR"
+explain_data = data[,c("Salary","PTS", "Team", "AGE","MIN", "PLUSMINUS", "Draft.Number", "REB", "AST", "TOV", "STL", "BLK", "FGM", "FGPER", "TPM", "TPPER", "FTM", "FTPER", "PF", "Position", "Country", "WR")]
 
 alphas <-c(0.005,0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08,0.09,0.10,0.20,0.30,0.40,0.50,0.60,0.70,0.80,0.90,1)
 n_alphas <-length(alphas)
@@ -80,7 +53,7 @@ cverror <-numeric(length =n_alphas)
 Mvals <-numeric(length =n_alphas)
 fit <-list(length =n_alphas)
 for (i in 1:n_alphas) {
-  set.seed(20180409)
+  set.seed(54321)
   fit[[i]] <- nba.boost.shrink <-gbm(as.formula(formula),
                                 data=explain_data,
                                 distribution ="gaussian",
@@ -96,5 +69,34 @@ for (i in 1:n_alphas) {
 plot(alphas, cverror,type ="b",col =adjustcolor("firebrick",0.7),pch=19,lwd=2,main ="cross-validated error",xlab ="shrinkage",ylab="cv.error")
           
 ```
-Best learning rate for more explainatory variables is at around 0.3, with cv error around 1.21  
+Best learning rate for more explainatory variables is at around 0.09, with cv error around 1.24
 
+```{r}
+alpha <- 0.09
+k <- 5
+set.seed(54321)
+# Shrinkage parameter values
+Ms <- c(50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000)
+n_Ms <- length(Ms)
+cverror <- numeric(length = n_Ms)
+Mvals <- numeric(length = n_Ms)
+fit <- list(length = n_Ms)
+for (i in 1:n_Ms) {
+  fit[[i]] <- nba.boost.shrink <- gbm(as.formula(formula),
+                                  data=explain_data,
+                                  distribution = "gaussian",
+                                  shrinkage = alpha,
+                                  n.trees = Ms[i],
+                                  bag.fraction = 1,
+                                  cv.folds = k
+  )
+  cverror[i] <- min(fit[[i]]$cv.error)
+}
+plot(Ms, cverror, type = "b",
+col = adjustcolor("firebrick", 0.7), pch=19, lwd=2,
+main = "cross-validated error", xlab = "Number of trees", ylab="cv.error")
+
+```
+
+We chose alpha = 0.09, which is the shrinkage suggested by the previous graph that has the least cross validation error.
+The result gives a minimum the 4500 at

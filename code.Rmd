@@ -421,7 +421,7 @@ plot(alphas, cverror,type ="b",
      pch=19,lwd=2,main ="cross-validated error",
      xlab ="shrinkage",ylab="cv.error")
 ```
-We see that the best learning rate for these 21 explainatory variates is at around 0.06, with cv error around 1.15.
+We see that the best learning rate for these 21 explanatory variates is at around 0.06, with cv error around 1.15.
 
 ```{r echo=FALSE}
 alpha <- 0.06
@@ -449,7 +449,8 @@ plot(Ms, cverror, type = "b",
      main = "cross-validated error", 
      xlab = "Number of trees", ylab="cv.error")
 ```
-We see that the best value for M for more explainatory variables is at about 150, with cv error around 1.16. We can see that the return is very small when M is bigger than 150.
+We would like to evaluate the best value for M, the total number of trees to fit, in order to find the minimum number of iterations needed to achieve the desired result having small cross validation error.
+We see that the best value for M for more explanatory variables is at about 150, with cv error around 1.16. We can see that the return is very small when M is bigger than 150.
 
 ## Player self-evaluate and improvements
 
@@ -505,7 +506,7 @@ plot(alphas, cverror,type ="b",
      pch=19,lwd=2,main ="cross-validated error",
      xlab ="shrinkage",ylab="cv.error")
 ```
-We see that the best learning rate for these 15 explainatory variates is also at around 0.06, with cv error around 1.66.
+We see that the best learning rate for these 15 explanatory variates is also at around 0.06 - 0.08, with cv error around 1.66.
 
 ```{r echo=FALSE}
 alpha <- 0.06
@@ -534,4 +535,4 @@ plot(Ms, cverror, type = "b",
 ```
 
 
-We see that the best value for M for more explainatory variables is also at about 200, with cv error around 1.66. We can see that the return is very small when M is bigger than 200.
+We see that the best value for M for more explanatory variables is also at about 200, with cv error around 1.66. We can see that the return is very small when M is bigger than 200.
