@@ -629,4 +629,50 @@ MingHao Lu: Motivation and Introduction, Data, Preprocessing, Smoothing Methods,
 
 Zizhou Wang: Motivation and Introduction, Data, Preprocessing, Random Forest, Future Work.
 
-Zhaoyang Wang: Data, Preprocessing, Boosting.
+Zhaoyang Wang: Data, Preprocessing, Boosting, Appendix.
+
+\newpage
+
+# Appendix
+
+## Data Details
+
+PTS (Points)-Average points score per game, scoring from free throws, 2 pointers, 3 pointers all counts in total score, with value 1, 2, 3 respectively. PTS = total score / games played.
+
+REB (Rebounds)-Average rebounds per game, including offensive rebounds and defensive rebounds, each count as 1. REB = (total offensive rebound + total defensive rebounds) / games played.
+
+AST (Assists)-Average assist per game. One assist is gained by player A when player A pass to player B and player B scores by a 2-pointer or 3-pointer right away (no other passes). AST = total assist / games played.
+
+STL (Steals)-Average steals per game. A steal is awarded when the player gets the control of ball from the opponent team.  STL = total steals / games played.
+
+BLK (Blocks)-Average blocks per game. A block is awarded when the player successfully blocks the shot from the opponent while defending. BLK = total blocks/ games played.
+
+PF(Personal Fouls)-Average fouls per game. A foul is a slight rule violation that is caught by the referee. Higher fouls is not preferred, but if a player does not defend properly, he can never foul! PF = total fouls / games played.
+
+TOV (Turn Overs)-Average turn overs per game. A turnover is when a player makes a bad move and lost the control of ball. Unlike most other statistics, less turnover is preferred. TOV = total turnover / games played.
+
+WR (Win Rate)-Winning rate is calculated as WR = Games Won/ Games Played.
+
+AGE-Players age as of this year.
+
+FGM (Field Goals Made)-Field goal includes 2-pointers and 3-pointers but not free throws. FGM = total field goals made / games played.
+
+FGPER (Field Goals Percentage)-FGPER = total field goals made / total field goals attempted.
+
+TPM (Three Points Made)-A subset of field goals, including only 3-pointers made. 3-pointers shots are made beyond the 3-point-line which is makes it the longest and (usually) the hardest shots to make. TPM = total 3 pointers made/ games played.
+
+TPPER (Three Point Percentage)-Similarly TPPER = total 3 pointers made/ total 3 pointers attempted. We do expected TPPER to be the lowest among FTPER, FGPER and TPPER.
+
+FTM (Free Throw Made)-Free throws is taken behind the free throw line, without any defenders. Each of the free throws counts as 1 point. Free throw opportunity can be given to a player in many cases, but the most important one is when he is fouled while attempt to shoot a normal field goal. FTM = Free throws made / games played.
+
+FTPER (Free Throw Percentage)-Again, FTPER = total free throws made/ total free throws attempted. Because there are no defenders, FTPER is usually higher than other percentages. However, for some players play as center, because their usual shooting range is closer than the free throw line, they might struggle in free throws.
+
+PLUSMINUS (Plus or Minus)-Plus or minus of one game is the number of points the player's team win by, while the player is on the courter playing. It could be positive or it could be negative. Here PLUSMINUS = total plus minus sum over all games / games played
+Position-Position can be center (C), power forward (PF), small forward (SF), shooting guard (SG), point guard (PG). Because usually a player can play multiple similar positions such as PF and SF, or C and PF, we simply our data into C, F and G, ordered from closest to basket to further away from the basket. C is more likely to get rebounds, shot 2 pointers. G is more likely to control/handle the ball and shoot from long range. On the other hand, F is a combination of both.
+
+Country-Nationality of the player. In cases a player with multiple citizenship, we select the nation he plays for in the national basketball team.
+MIN (Minutes)-Average minutes played per game. MIN = total minutes played / games played.
+
+Draft.Round-The draft number of the player. Each year there are 2 round of drafts with 30 teams picking 1 player in each round. This results in players having either 1 or 2 in this attribute, or Undrafted, if the player is not from the draft (e.g. other leagues).
+
+
