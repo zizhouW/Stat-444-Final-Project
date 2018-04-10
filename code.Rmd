@@ -421,7 +421,7 @@ plot(alphas, cverror,type ="b",
      pch=19,lwd=2,main ="cross-validated error",
      xlab ="shrinkage",ylab="cv.error")
 ```
-We see that the best learning rate for these 21 explainatory variates is at around 0.06, with cv error around 1.15
+We see that the best learning rate for these 21 explainatory variates is at around 0.06, with cv error around 1.15.
 
 ```{r echo=FALSE}
 alpha <- 0.06
